@@ -1,0 +1,92 @@
+{
+  "name": "ghostykit",
+  "version": "0.1.0",
+  "description": "Piloto UI — the in-app copilot chat from Ghosty Studio: streaming, agent steps, attachments, voice, reconnection and human approval cards. Pure event reducer + SSE transport + React components.",
+  "type": "module",
+  "main": "./dist/core/index.js",
+  "types": "./dist/core/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/react/index.d.ts",
+      "import": "./dist/react/index.js"
+    },
+    "./core": {
+      "types": "./dist/core/index.d.ts",
+      "import": "./dist/core/index.js"
+    },
+    "./transport": {
+      "types": "./dist/transport/index.d.ts",
+      "import": "./dist/transport/index.js"
+    },
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "import": "./dist/react/index.js"
+    },
+    "./pointer": {
+      "types": "./dist/pointer/index.d.ts",
+      "import": "./dist/pointer/index.js"
+    },
+    "./styles.css": "./dist/styles.css",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": [
+    "*.css"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && node scripts/build.mjs && tsc -p tsconfig.build.json && node scripts/build-css.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "prepack": "cp ../../LICENSE ../../README.md . 2>/dev/null; npm run build"
+  },
+  "peerDependencies": {
+    "@ghostystudio/pointer": ">=0.4.0",
+    "motion": ">=11",
+    "react": ">=18",
+    "react-dom": ">=18",
+    "streamdown": ">=2.5.0 <3"
+  },
+  "peerDependenciesMeta": {
+    "@ghostystudio/pointer": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@ghostystudio/pointer": "^0.4.0",
+    "@tailwindcss/cli": "^4.1.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "esbuild": "^0.25.0",
+    "lucide-react": "^1.44.0",
+    "motion": "^12.38.0",
+    "postcss": "^8.5.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "streamdown": "^2.7.0",
+    "tailwindcss": "^4.1.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "copilot",
+    "chat",
+    "react",
+    "sse",
+    "acp",
+    "human-in-the-loop",
+    "ghosty"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/blissito/ghostykit.git",
+    "directory": "packages/ghostykit"
+  },
+  "homepage": "https://github.com/blissito/ghostykit#readme"
+}
