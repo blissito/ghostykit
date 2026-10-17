@@ -44,7 +44,9 @@ jobs:
           npm test
           NAME=$(node -p "require('./package.json').name")
           VERSION=$(node -p "require('./package.json').version")
-          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+          if ! npm view "$NAME" name >/dev/null 2>&1; then
+            echo "$NAME todavía no existe en npm: la primera publicación es manual (ver arriba) — se salta."
+          elif npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
             echo "$NAME@$VERSION ya está publicado — se salta."
           else
             npm publish --access public
