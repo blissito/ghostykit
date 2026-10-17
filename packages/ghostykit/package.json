@@ -41,7 +41,7 @@
     "build": "rm -rf dist && node scripts/build.mjs && tsc -p tsconfig.build.json && node scripts/build-css.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "prepack": "cp ../../LICENSE ../../README.md . 2>/dev/null; npm run build"
+    "prepack": "cp ../../LICENSE . && npm run build"
   },
   "peerDependencies": {
     "@ghostystudio/pointer": ">=0.4.0",

@@ -1,0 +1,46 @@
+/* Entrada de Tailwind (sólo en el build). Las utilidades que usan los componentes de Piloto y las de
+   Streamdown se compilan aquí y `scripts/build-css.mjs` las encierra bajo `.piloto`: el consumidor no
+   necesita Tailwind, y si lo tiene (3 o 4) no choca con el suyo. Los colores apuntan a `--piloto-*`
+   (`@theme inline`): cambiar una variable cambia el chat entero. */
+@import "tailwindcss/theme.css";
+@import "tailwindcss/utilities.css";
+
+@source "../react";
+@source "../../../../node_modules/streamdown/dist/*.js";
+
+@theme inline {
+  --font-sans: var(--piloto-font);
+  --font-mono: var(--piloto-font-mono);
+
+  --color-text-primary: var(--piloto-text);
+  --color-text-secondary: var(--piloto-text-2);
+  --color-text-tertiary: var(--piloto-text-3);
+  --color-text-disabled: var(--piloto-text-disabled);
+  --color-text-inverse: var(--piloto-text-inverse);
+  --color-text-info: var(--piloto-accent-strong);
+  --color-text-success: var(--piloto-success);
+  --color-text-danger: var(--piloto-danger);
+
+  --color-background-primary: var(--piloto-bg);
+  --color-background-secondary: var(--piloto-surface);
+  --color-background-tertiary: var(--piloto-surface-2);
+  --color-background-inverse: var(--piloto-inverse);
+  --color-background-success: var(--piloto-success);
+
+  --color-border-primary: var(--piloto-border);
+  --color-border-secondary: var(--piloto-border-2);
+
+  --color-brand-300: var(--piloto-accent-soft);
+  --color-brand-500: var(--piloto-accent);
+  --color-brand-600: var(--piloto-accent-strong);
+
+  /* Los tokens tipo shadcn que usa Streamdown por dentro. */
+  --color-background: var(--piloto-bg);
+  --color-foreground: var(--piloto-text);
+  --color-muted: var(--piloto-surface);
+  --color-muted-foreground: var(--piloto-text-3);
+  --color-border: var(--piloto-border);
+  --color-sidebar: var(--piloto-surface);
+  --color-primary: var(--piloto-accent-strong);
+  --color-primary-foreground: var(--piloto-on-accent);
+}

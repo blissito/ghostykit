@@ -10,6 +10,6 @@
     "build": "npm run build -w ghostykit",
     "test": "npm test -w ghostykit",
     "typecheck": "npm run typecheck -w ghostykit",
-    "demo": "npm run dev -w ghostykit-demo"
+    "demo": "npm run build -w ghostykit && npm run dev -w ghostykit-demo"
   }
 }
