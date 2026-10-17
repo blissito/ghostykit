@@ -1,0 +1,33 @@
+/* Sólo el marco del playground: el chat trae su propia piel (ghostykit/styles.css). */
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; background: #f4f4f7; color: #191a20; }
+.demo { display: grid; grid-template-columns: minmax(280px, 380px) 1fr; grid-template-rows: 100%; height: 100%; overflow: hidden; }
+.demo-dark { background: #0b0b0f; color: #f4f4f6; }
+.panel { padding: 24px; overflow-y: auto; border-right: 1px solid #e1e3e7; display: flex; flex-direction: column; gap: 14px; }
+.demo-dark .panel { border-color: #2e2e3a; }
+.panel h1 { font-size: 22px; margin: 0; }
+.panel h1 span { font: 500 12px ui-monospace, monospace; opacity: .6; margin-left: 6px; }
+.panel h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; opacity: .6; margin: 10px 0 0; }
+.panel p { margin: 6px 0 0; font-size: 14px; opacity: .75; line-height: 1.5; }
+.controls { display: flex; flex-wrap: wrap; gap: 12px; font-size: 13px; align-items: center; }
+.controls label { display: flex; gap: 6px; align-items: center; }
+.controls select { font: inherit; padding: 2px 6px; border-radius: 6px; }
+.crons { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.crons li { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid #e1e3e7; border-radius: 12px; background: #fff; cursor: pointer; }
+.demo-dark .crons li { background: #15151c; border-color: #2e2e3a; }
+.crons li.sel { outline: 2px solid #8483e0; }
+.crons li div { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.crons small { opacity: .6; font-size: 12px; }
+.crons button { border: 1px solid #e1e3e7; background: transparent; color: inherit; border-radius: 999px; padding: 2px 9px; font: inherit; font-size: 12px; cursor: pointer; }
+.crons button.ask { background: #8483e0; color: #fff; border-color: #8483e0; }
+.st { font-size: 11px; padding: 2px 8px; border-radius: 999px; }
+.st-ok { background: #e6f4dd; color: #3b7a1f; }
+.st-atrasado { background: #fdf0d8; color: #9a6510; }
+.st-falló { background: #fde3e1; color: #b3372e; }
+.log { list-style: none; margin: 0; padding: 0; font: 12px ui-monospace, monospace; opacity: .7; display: flex; flex-direction: column; gap: 4px; }
+.chat { min-width: 0; min-height: 0; height: 100%; }
+@media (max-width: 760px) {
+  .demo { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+  .panel { max-height: 38vh; border-right: 0; border-bottom: 1px solid #e1e3e7; padding: 16px; }
+}
