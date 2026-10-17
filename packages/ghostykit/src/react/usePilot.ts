@@ -14,6 +14,7 @@ import {
   resumeMode,
   sendAccepted,
   sendFailed,
+  sendRejectedBusy,
   stopTurn,
 } from "../core/reducer";
 import type { Attachment, Interrupted, PilotState, Reference, SendInput, Turn } from "../core/types";
@@ -180,6 +181,10 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
         const r = await t.send(input);
         commit(sendAccepted(ref.current, r, inFlight));
       } catch (e) {
+        if ((e as { code?: string })?.code === "turn_busy") {
+          commit(sendRejectedBusy(ref.current, message(e, "Ya hay un turno en curso.")));
+          return;
+        }
         commit(sendFailed(ref.current, message(e, "No se pudo mandar el mensaje"), Boolean((e as { needsLogin?: boolean })?.needsLogin)));
       }
     },

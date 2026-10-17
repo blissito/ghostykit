@@ -260,7 +260,7 @@ export function reducePilotEvent(prev: PilotState, name: string, data: unknown, 
       // Sin lugar ahora mismo: se dice y el turno se suelta (se puede volver a mandar en un rato).
       if (!isObj(data)) return s;
       const message = typeof d.message === "string" && d.message ? d.message : "No hay capacidad ahora mismo. Intenta en un momento.";
-      return reduceDone({ ...s, error: message }, { turnId: d.turnId }, now);
+      return { ...reduceDone(s, { turnId: d.turnId }, now), notice: message };
     }
     case "artifact":
       if (!isObj(data)) return s;
@@ -470,6 +470,16 @@ export function sendAccepted(prev: PilotState, r: SendResult, inFlight: boolean,
     };
   }
   return s;
+}
+
+/**
+ * El servidor ya tiene un turno corriendo (409 `turn_busy`): el mensaje de este cliente NO entró.
+ * Se quita de la pantalla y se avisa; el transporte se re-engancha al turno que sí corre.
+ */
+export function sendRejectedBusy(prev: PilotState, message: string): PilotState {
+  const turns = [...prev.turns];
+  if (turns[turns.length - 1]?.role === "user") turns.pop();
+  return { ...prev, turns, busy: false, streaming: false, turnStartedAt: 0, notice: message, effects: [] };
 }
 
 /** El encargo fue rechazado (sin saldo, sin cuenta…): se DICE, para que no se quede pensando. */

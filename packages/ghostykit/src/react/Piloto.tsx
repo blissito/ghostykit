@@ -382,7 +382,7 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
                   <p className="piloto-interrupted text-sm text-text-secondary">
                     {/me quedé a medias|i stopped halfway/i.test(last?.text ?? "") ? t.interruptedOurFault : t.interrupted(interrupted.reason)}{" "}
                     <button type="button" onClick={pilot.resume} className="cursor-pointer text-text-primary underline underline-offset-2">
-                      {t.resume}
+                      {interrupted.canContinue ? t.continueTurn : t.resume}
                     </button>
                   </p>
                 )}

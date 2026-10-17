@@ -88,12 +88,17 @@ describe("createPostStreamTransport (contrato de EasyBits)", () => {
     expect(JSON.parse(String(calls[1].init?.body)).turnId).toBe("T2");
   });
 
-  it("409 turn_busy se lanza con su mensaje", async () => {
-    const { fetch } = fakeFetch([() => Response.json({ error: "turn_busy", message: "Ya hay un turno en curso" }, { status: 409 })]);
-    const t = createPostStreamTransport("/chat", { fetch, attachUrl: null });
+  it("409 turn_busy: se lanza con su código y se re-engancha al turno que sí corre", async () => {
+    const { fetch, calls } = fakeFetch([
+      () => Response.json({ error: "turn_busy", message: "Ya hay un turno en curso" }, { status: 409 }),
+      () => stream(body([sse([["started", {}], ["snapshot", { turnId: "B", text: "x", tools: [] }], ["done", { turnId: "B" }]])]).stream),
+    ]);
+    const t = createPostStreamTransport({ url: "/chat", fetch });
     const err = await t.send({ text: "x", attachments: [], firstTurn: false }).catch((e) => e);
     expect(err).toBeInstanceOf(PilotHttpError);
-    expect(err).toMatchObject({ status: 409, message: "Ya hay un turno en curso" });
+    expect(err).toMatchObject({ status: 409, code: "turn_busy", message: "Ya hay un turno en curso" });
+    await settle(20);
+    expect(calls.map((c) => c.url)).toEqual(["/chat", "/chat?attach=1"]);
   });
 
   it("`error` es final: se cierra con un `done` sintético", async () => {

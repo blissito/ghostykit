@@ -107,7 +107,12 @@ function uuid(): string {
  * evento final (red, deploy), se re-engancha con el GET de attach y el servidor dice la verdad
  * (`snapshot` y sigue, o el evento final, o `idle`).
  */
-export function createPostStreamTransport(url: string, opts: PostStreamTransportOptions = {}): PilotTransport {
+export function createPostStreamTransport(
+  target: string | (PostStreamTransportOptions & { url: string }),
+  options: PostStreamTransportOptions = {},
+): PilotTransport {
+  const url = typeof target === "string" ? target : target.url;
+  const opts: PostStreamTransportOptions = typeof target === "string" ? options : { ...target, ...options };
   const doFetch = (...a: Parameters<typeof fetch>) => (opts.fetch ?? fetch)(...a);
   const credentials = opts.credentials ?? "same-origin";
   const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
@@ -236,7 +241,12 @@ export function createPostStreamTransport(url: string, opts: PostStreamTransport
         }
         if (!res.ok) {
           const json = (await res.json().catch(() => null)) as { message?: string; error?: string } | null;
-          throw new PilotHttpError(json?.message ?? json?.error ?? `Error ${res.status}`, res.status, res.headers.get("X-Needs-Login") != null);
+          const err = new PilotHttpError(json?.message ?? json?.error ?? `Error ${res.status}`, res.status, res.headers.get("X-Needs-Login") != null);
+          if (json?.error) err.code = json.error;
+          // Ya hay un turno corriendo (otra pestaña, el teléfono): se re-engancha a ÉL en vez de
+          // quedarse con un error. El mensaje de este cliente no entró.
+          if (res.status === 409 && json?.error === "turn_busy") void attach();
+          throw err;
         }
         // El stream se lee aparte: `send` regresa en cuanto el servidor aceptó el turno.
         void consume(res, ctrl).then((ok) => {

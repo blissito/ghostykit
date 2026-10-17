@@ -2,7 +2,7 @@
 // MISMO reductor: pasos sin id, `snapshot` al re-engancharse, `idle`, `interrupted`, `capacity`,
 // `error` final y tarjetas de permiso que viven más que el turno.
 import { describe, expect, it } from "vitest";
-import { beginSend, createPilotState, reducePilotEvent, resolvePermission, sendAccepted, type PilotState } from "../src/core";
+import { beginSend, createPilotState, reducePilotEvent, resolvePermission, sendAccepted, sendRejectedBusy, type PilotState } from "../src/core";
 
 type Ev = [name: string, data?: unknown];
 function replay(s: PilotState, events: Ev[], clock = { now: 1_000 }): PilotState {
@@ -104,8 +104,19 @@ describe("EasyBits: turno por POST que devuelve el stream", () => {
   it("`capacity`: se dice y el turno se suelta", () => {
     const s = replay(posted(), [["capacity", { message: "Tu flota está llena", retryAfter: 10 }]]);
     expect(s.busy).toBe(false);
-    expect(s.error).toBe("Tu flota está llena");
+    expect(s.notice).toBe("Tu flota está llena");
+    expect(s.error).toBeNull();
     expect(s.effects.at(-1)).toMatchObject({ type: "turn-done" });
+  });
+
+  it("409 `turn_busy`: el mensaje no entró, se quita y se avisa (el transporte se re-engancha)", () => {
+    let s = beginSend(opened(), "otra cosa", [], 2_000);
+    s = sendRejectedBusy(s, "Ya hay un turno en curso");
+    expect(s.turns).toEqual([]);
+    expect(s.busy).toBe(false);
+    expect(s.notice).toBe("Ya hay un turno en curso");
+    s = replay(s, [["started", {}], ["snapshot", { turnId: "eX", text: "Trabajando", tools: [] }]]);
+    expect(s.busy).toBe(true);
   });
 
   it("`interrupted{canContinue}`: Retomar continuará ESE turno", () => {

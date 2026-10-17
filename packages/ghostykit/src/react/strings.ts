@@ -42,6 +42,8 @@ export interface PilotStrings {
   cantStart: string;
   retry: string;
   resume: string;
+  /** Con `interrupted.canContinue`: el servidor continúa ESE turno. */
+  continueTurn: string;
   interrupted: (reason: string) => string;
   interruptedOurFault: string;
   copy: string;
@@ -124,6 +126,7 @@ export const STRINGS_ES: PilotStrings = {
   cantStart: "No pude arrancar.",
   retry: "Reintentar",
   resume: "Retomar",
+  continueTurn: "Continuar",
   interrupted: (reason) => `Me quedé a medias: ${reason}.`,
   interruptedOurFault: "Se cortó por una falla nuestra, no por tu mensaje.",
   copy: "Copiar",
@@ -209,6 +212,7 @@ export const STRINGS_EN: PilotStrings = {
   cantStart: "Couldn't start.",
   retry: "Retry",
   resume: "Resume",
+  continueTurn: "Continue",
   interrupted: (reason) => `I stopped halfway: ${reason}.`,
   interruptedOurFault: "It stopped because of an error on our side, not your message.",
   copy: "Copy",

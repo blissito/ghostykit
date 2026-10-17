@@ -34,6 +34,8 @@ export class PilotHttpError extends Error {
   status: number;
   /** El servidor pide cuenta (`X-Needs-Login`). */
   needsLogin: boolean;
+  /** El `error` del cuerpo, si el servidor lo dio (`turn_busy`, `draining`…). */
+  code?: string;
   constructor(message: string, status: number, needsLogin = false) {
     super(message);
     this.name = "PilotHttpError";
