@@ -293,7 +293,7 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
   const pageInProgress = last?.role === "assistant" && (Boolean(last.planning) || (last.pages ?? []).some((p) => !p.error && (!p.readyAt || p.review?.status === "running")));
   const toolRunning = busy && last?.role === "assistant" && ((last.tools ?? []).some(isRunning) || pageInProgress);
   const empty = turns.length === 0 && !busy;
-  const placeholder = !connected ? t.placeholderConnecting : (props.placeholder ?? t.placeholder(props.agentName ?? (locale === "en" ? "the agent" : "el agente")));
+  const placeholder = !connected ? t.placeholderConnecting : (props.placeholder ?? (props.agentName ? t.placeholder(props.agentName) : t.placeholderDefault));
   const showFiles = features.attachments ?? Boolean(props.upload);
 
   // El estado de conexión sólo si tarda: una conexión rápida no debe parpadear.

@@ -33,7 +33,8 @@ export function App() {
           <h1>
             Piloto UI <span>ghostykit</span>
           </h1>
-          <p>El copiloto de tu app. Este panel es «tu app»; el chat de la derecha es Piloto con un transporte simulado.</p>
+          <p>El copiloto de tu app. Este panel es «tu app»; el chat de la derecha es Piloto con un transporte simulado. Pídele «¿por qué falló el monitor?».</p>
+          <p><a href="https://github.com/blissito/ghostykit">github.com/blissito/ghostykit</a> · <code>npm i ghostykit</code></p>
         </header>
         <div className="controls">
           <label>

@@ -5,6 +5,8 @@ export interface PilotStrings {
   /** Para formatear números y moneda. */
   numberLocale: string;
   placeholder: (agentName: string) => string;
+  /** Sin `agentName`. */
+  placeholderDefault: string;
   placeholderConnecting: string;
   send: string;
   stop: string;
@@ -86,6 +88,7 @@ export interface PilotStrings {
 export const STRINGS_ES: PilotStrings = {
   numberLocale: "es-MX",
   placeholder: (agent) => `Escríbele a ${agent}`,
+  placeholderDefault: "Escríbele al agente",
   placeholderConnecting: "Conectando con el agente…",
   send: "Enviar",
   stop: "Detener",
@@ -175,6 +178,7 @@ export const STRINGS_ES: PilotStrings = {
 export const STRINGS_EN: PilotStrings = {
   numberLocale: "en-US",
   placeholder: (agent) => `Message ${agent}`,
+  placeholderDefault: "Message the agent",
   placeholderConnecting: "Connecting to the agent…",
   send: "Send",
   stop: "Stop",

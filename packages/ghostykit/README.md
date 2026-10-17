@@ -1,10 +1,27 @@
 # Piloto UI · `ghostykit`
 
-**The in-app copilot chat from [Ghosty Studio](https://www.ghosty.studio)** — an agent chat that lives
-inside an app you already have: streaming text, agent steps, attachments, voice notes, reconnection when
-the network drops, and approval cards before anything risky (*human in the loop*).
+**An in-app copilot for React.** Piloto UI is the agent chat from
+[Ghosty Studio](https://www.ghosty.studio), packaged as a library. You drop it into an app you already
+have. It sees what the user has on screen, streams what the agent says and does, and **stops to ask
+before anything risky** (human in the loop).
 
-> El copiloto de tu app: el chat de Ghosty, probado en producción, como biblioteca.
+> El copiloto de tu app: el chat de Ghosty, probado en producción, como biblioteca. Español por default, inglés incluido.
+
+**[Open the playground →](https://blissito.github.io/ghostykit/)** (a fake backend, a real chat)
+
+![The permission pass: the agent asks before running a cron](https://raw.githubusercontent.com/blissito/ghostykit/main/docs/screenshots/ghosty-light-desktop-2-permission.png)
+
+## What you get
+
+- **Live answers**: markdown streamed at a readable pace (Streamdown), with code blocks and tables. External links ask for confirmation before opening.
+- **Agent steps**: every tool call as a line ("Read 2 files", "Searched the web"). Steps fold into a card when the turn ends, and you can show your own labels and icons.
+- **The permission pass**: risky actions arrive as a card with a countdown, *Approve* and *Reject*. A stamp lands when you answer, and the decision stays recorded under the reply.
+- **Context and references**: what the user is looking at travels with every turn. Rows from your app can be "@-mentioned" into the message.
+- **Resilience**: reconnects after a dropped network or a deploy, re-attaches to a running turn, retries while the server drains, and offers *Resume* when a turn is cut short.
+- **The composer**: attachments (you provide `upload`), voice notes (you provide `transcribe`), stop, model picker and reply-option buttons.
+- **Solid core**: the whole chat state is a pure reducer, `reducePilotEvent(state, name, data)`, tested by replaying real SSE sessions.
+
+## 30-second quickstart
 
 ```bash
 npm i ghostykit motion streamdown
@@ -13,25 +30,70 @@ npm i ghostykit motion streamdown
 ```tsx
 import { Piloto, useSseTransport } from "ghostykit";
 import "ghostykit/styles.css";
+import "ghostykit/fonts.css"; // optional: the house typefaces
 
 export function Copilot() {
-  const transport = useSseTransport("/api/copilot/conversations/abc");
+  const transport = useSseTransport("/api/copilot/conversations/123");
   return <Piloto transport={transport} />;
 }
 ```
 
-That's it. Everything else is optional.
+`<Piloto transport={…} />` works with nothing else. Give its container a height: Piloto fills it.
 
-## Three entry points
+## Transports
 
-| Import | What | React? |
-|---|---|---|
-| `ghostykit/core` | `reducePilotEvent(state, name, data)` — the whole chat state as a **pure reducer**, plus types, `reconcileTurns`, narration / reply-option / step parsers | no |
-| `ghostykit/transport` | `PilotTransport` interface + `createSseTransport(base)` (Ghosty: EventSource + POST) and `createPostStreamTransport(url)` (the POST returns the SSE; re-attach + history) | no |
-| `ghostykit` / `ghostykit/react` | `usePilot(transport)`, `<Piloto />` and every piece (`AgentBubble`, `AgentSteps`, `Composer`, `ConfirmCard`, `Markdown`, …) | yes |
-| `ghostykit/pointer` | `elementReference(picked, file)` — turn an element picked with `@ghostystudio/pointer` into a message reference | optional |
+A transport is how Piloto talks to your agent. It is a small interface: `subscribe`, `send`, `cancel`,
+plus optional `setModel`, `respondPermission` and `history`. Two are included.
 
-## A real copilot
+### 1. Split stream: `createSseTransport(base)` (Ghosty's contract)
+
+The event stream stays open (`EventSource`) and messages go by POST.
+
+| | |
+|---|---|
+| `GET  {base}/events` | Named SSE events: `started`, `status`, `chunk`, `thought`, `tool`, `permission`, `permission-resolved`, `usage`, `models`, `title`, `done{reposo?,interrumpido?,ultimo?}`, `error`… |
+| `POST {base}/messages` | `{content, images, primerTurno, retomar?, context?}` → `{inyectado?, estado?, turnId?}` |
+| `POST {base}/cancel` · `/model` · `/permission` | stop, switch model, answer a card |
+
+Messages sent during a running turn are injected into it (steer). A silent connection during a turn is
+reopened, and the server says whether the turn continued, finished or was cut short.
+
+### 2. POST returns the stream: `createPostStreamTransport({ url })` (EasyBits' contract)
+
+The POST that starts a turn *is* the SSE. A GET re-attaches to a running turn.
+
+| | |
+|---|---|
+| `POST {url}` | `{text, context?, turnId, continueTurnId?}` → SSE `started`, `chunk`, `tool{title,status}`, `permission{…, expiresAt}`, `done{turnId,text}`, `error`, `capacity`, `interrupted{turnId,canContinue}`, `idle` |
+| `GET {url}?attach=1` | `started`, one `permission` per open card, `snapshot{turnId,text,tools}`, then live |
+| `GET {url}` | `{messages:[{role,text}]}`, loaded as the thread |
+
+A 503 (deploy draining) is retried with the same `turnId`. A 409 `turn_busy` re-attaches to the turn
+that is already running. Approvals usually go through your own route:
+
+```tsx
+<Piloto
+  transport={useMemo(() => createPostStreamTransport({ url: "/api/v2/admin/copilot/chat" }), [])}
+  context={{ page: "crons", job: selectedJob }}
+  onPermission={async (id, optionId) => {
+    const res = await fetch(`/api/v2/admin/agent-actions/${id}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ decision: optionId === "approve" ? "approve" : "reject" }),
+    });
+    if (res.status === 409 || res.status === 404) return { resolved: false }; // expired or already answered
+    if (!res.ok) throw new Error("approval failed");
+    return { resolved: true, detail: (await res.json()).status };
+  }}
+/>
+```
+
+### 3. Your own
+
+Implement `PilotTransport` and emit the same event names (see `ghostykit/core` types). If you only need
+the state, use the reducer directly: `ghostykit/core` has no React dependency.
+
+## Make it yours
 
 ```tsx
 const ref = useRef<PilotoHandle>(null);
@@ -39,98 +101,73 @@ const ref = useRef<PilotoHandle>(null);
 <Piloto
   ref={ref}
   transport={transport}
+  skin="easybits"            // "ghosty" (default) | "easybits" | "neutral" | your own
+  theme="auto"               // "light" | "dark" | "auto"
+  locale="en"                // Spanish by default
   agentName="Admin assistant"
-  locale="en"                                  // Spanish by default
-  theme="auto"                                 // light | dark | auto
-  context={() => ({ screen: "crons", selected })} // travels with EVERY turn (body.context)
+  welcome="How can I help with your crons?"
   suggestions={["Why did the monitor fail?"]}
+  context={() => ({ screen: "crons", selected })}            // sent with EVERY turn
   toolVerbs={{ run_cron: { one: "Ran a cron", many: "Ran %n crons", running: "Running the cron…" } }}
-  upload={async (file) => ({ url: await myUpload(file) })}     // attachments
-  transcribe={async (blob) => myWhisper(blob)}               // voice notes
-  onTurnDone={({ text, seconds }) => revalidate()}           // app effects at turn end
-  onPermission={(id, optionId) => approve(id, optionId)}     // default: transport.respondPermission
+  upload={async (file) => ({ url: await myUpload(file) })}
+  transcribe={async (audio) => myWhisper(audio)}
+  onTurnDone={({ text }) => refreshMyData()}
   slots={{ renderDeliveries: (turn) => <MyFiles turn={turn} />, composerExtras: <MyButton /> }}
-/>
+/>;
 
-// From your app: "@" a row into the composer, or ask on behalf of the user.
-ref.current?.addReference({ id: "12", label: "#12 Rosa" });
-ref.current?.send("Why did this fail?");
+ref.current?.addReference({ id: "12", label: "#12 Rosa" }); // "@" a row into the message
+ref.current?.send("Why did this fail?");                     // ask on the user's behalf
 ```
 
-### Props (all optional except `transport`)
+Other options: `strings`, `toolIcons`, `formatUserText`, `markdown`, `features`
+(`attachments`, `retry`, `copy`, `usage`, `models`, `replyOptions`, `duration`), `references` /
+`onReferencesChange`, `voiceNoteText`, `placeholder`, `avatar`, `initialTurns`, and the callbacks
+`onTurnStart`, `onTitle`, `onNeedsLogin`, `onDisconnected`, `onEvent`, `onSend`. To read the state
+outside the chat, call `usePilot(transport)` yourself and pass the result as `pilot`. Every piece is
+exported (`AgentBubble`, `AgentSteps`, `Composer`, `ConfirmCard`, `Markdown`, …) if you want to build
+your own layout.
 
-`agentName` · `locale` (`"es"`/`"en"`) · `strings` (override any text) · `theme` · `className` / `style` ·
-`welcome` · `avatar` · `placeholder` · `suggestions` · `context` · `initialTurns` · `toolVerbs` · `toolIcons`
-(by step `kind` or tool name) · `formatUserText` · `markdown` (`{ transform, onLinkClick }`) · `upload` ·
-`transcribe` · `voiceNoteText` · `features` (`attachments`, `retry`, `copy`, `usage`, `models`,
-`replyOptions`, `duration`) · `references` / `onReferencesChange` / `onReferenceClick` · `onPermission` ·
-`slots` (`renderDeliveries`, `composerExtras`, `emptyState`, `headerActions`, `aboveComposer`) ·
-callbacks `onTurnStart`, `onTurnDone`, `onTitle`, `onNeedsLogin`, `onDisconnected`, `onEvent`, `onSend` ·
-`pilot` (pass your own `usePilot()` result to read state outside).
+### Skins and theming
 
-## The SSE contract (`createSseTransport(base)`)
-
-- `GET  {base}/events` — named SSE events: `started{latidoMs}`, `status{phase,otraCaja}`, `caps`, `models`,
-  `chunk{text,turnId}`, `thought`, `tool{id,title,kind,status,detalle,path}`, `artifact`, `usage`, `title`,
-  `permission{id,title,tool,options[]}`, `permission-resolved{id}`, `reemplazo{text}`, `warning`, `error`,
-  `done{turnId, reposo?, interrumpido?, ultimo?}`, `closed`, plus the page-builder events.
-- `POST {base}/messages` `{content, images, primerTurno, retomar?, context?}` → `{inyectado?, estado?, turnId?}`
-- `POST {base}/cancel` · `POST {base}/model {value}` · `POST {base}/permission {id, optionId}` → `{resuelto}`
-
-Any other backend: implement `PilotTransport` (`subscribe`, `send`, `cancel`, optional `setModel`,
-`respondPermission`) and emit the same event names.
-
-## Other backend: the POST returns the stream (`createPostStreamTransport(url)`)
-
-For servers where the POST that starts the turn *is* the SSE (the EasyBits admin copilot, most
-fetch-based chats), with a GET to re-attach to a live turn:
-
-```tsx
-const transport = useMemo(() => createPostStreamTransport("/api/v2/admin/copilot/chat"), []);
-
-<Piloto
-  transport={transport}
-  context={{ page: "crons", job: selectedJob }}
-  // Approvals go through the app's own route, with the session cookie:
-  onPermission={async (id, optionId) => {
-    const res = await fetch(`/api/v2/admin/agent-actions/${id}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ decision: optionId === "approve" ? "approve" : "reject" }),
-    });
-    if (res.status === 409 || res.status === 404) return { resolved: false }; // expired / already resolved
-    if (!res.ok) throw new Error((await res.json()).error);
-    const r = await res.json();
-    return { resolved: true, detail: r.status === "executed" ? "ejecutada" : undefined };
-  }}
-/>
-```
-
-- `POST {url} {text, context?, turnId, continueTurnId?}` → SSE `started`, `chunk`, `tool{title,status}` (no id
-  needed), `permission{…, expiresAt}`, `done{turnId,text}`, `error` (final), `capacity`, `interrupted{turnId,canContinue}`, `idle`.
-  503 is retried with the same `turnId`; 409 `turn_busy` surfaces as an error (the composer won't send
-  while a turn runs: `transport.steer === false`).
-- `GET {url}?attach=1` → `started`, one `permission` per open card, `snapshot{turnId,text,tools,cortes}`, then live.
-  Used on mount and whenever a stream ends without a final event.
-- `GET {url}` → `{messages:[{role,text}]}`: loaded as the thread when you don't pass `initialTurns`.
-- Cards with `expiresAt` show a countdown, outlive their turn, and once answered are recorded under the
-  answer («Aprobaste · …»).
-
-## Skin
-
-`ghostykit/styles.css` is self-contained and scoped under `.piloto`: it works with Tailwind 3, Tailwind 4
-or no Tailwind at all. Every color, radius, shadow and border width is a `--piloto-*` variable:
+`ghostykit/styles.css` is self-contained and scoped under `.piloto`. It works the same with
+**Tailwind 3, Tailwind 4 or no Tailwind** (verified in a Tailwind 3 app: its utilities compute
+identically with and without Piloto's CSS). Every color, radius, border width and shadow is a
+variable:
 
 ```css
-.my-admin .piloto {
-  --piloto-accent: #7c3aed;
-  --piloto-warning: #fbbf24;
-  --piloto-radius-card: 8px;
-  --piloto-border-width: 2px;
-  --piloto-shadow-card: 5px 5px 0 #fbbf24;
+.my-app .piloto {
+  --piloto-accent: #0f766e;
+  --piloto-warning: #fde68a;      /* the permission pass */
+  --piloto-radius-card: 6px;
+  --piloto-border-width: 3px;
+  --piloto-shadow-hero: 6px 6px 0 #0f766e;
+  --piloto-font: "Your Sans", sans-serif;
 }
+```
+
+| Ghosty | EasyBits | Neutral |
+|---|---|---|
+| ![Ghosty skin](https://raw.githubusercontent.com/blissito/ghostykit/main/docs/screenshots/ghosty-light-mobile-2-permission.png) | ![EasyBits skin, dark](https://raw.githubusercontent.com/blissito/ghostykit/main/docs/screenshots/easybits-dark-mobile-2-permission.png) | ![Neutral skin](https://raw.githubusercontent.com/blissito/ghostykit/main/docs/screenshots/neutral-light-mobile-2-permission.png) |
+
+## Accessibility
+
+- Keyboard-first: Enter sends, Shift+Enter adds a new line, Backspace on an empty box removes the last reference. Menus close with Escape, and focus rings are visible (`--piloto-focus`).
+- The permission pass is a labelled region; the stamp is announced as status, and errors as alerts.
+- `prefers-reduced-motion` turns off every animation, including the text-at-pace effect, the stamp and the "thinking" lamps.
+- Dark mode is real, not inverted: hard shadows switch to a color so they stay visible on dark backgrounds.
+
+## The repo
+
+- `packages/ghostykit`: the package (`core`, `transport`, `react`, `pointer`, `styles.css`, `fonts.css`)
+- `apps/demo`: the playground (Vite, simulated transport, skin switcher)
+
+```bash
+npm install
+npm test        # reducer, both transports, parsers, SSR
+npm run build   # dist/ (JS + .d.ts + styles.css)
+npm run demo    # http://localhost:5173
 ```
 
 ## License
 
-MIT
+MIT © Héctor BlisS (FixterGeek)
