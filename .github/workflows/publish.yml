@@ -1,0 +1,51 @@
+name: Publish ghostykit
+
+# Subir `version` en packages/ghostykit/package.json y hacer merge a main ES publicar. Sin tokens:
+# npm Trusted Publishing (OIDC) confía en ESTE workflow (npmjs.com → ghostykit → Settings → Trusted
+# Publisher: blissito/ghostykit, publish.yml). Se publica SÓLO si la versión no está en npm: un
+# re-run salta limpio; un error real falla.
+#
+# ⚠️ La PRIMERA publicación la hace el dueño a mano (`npm publish` desde packages/ghostykit): npm no
+# deja configurar el Trusted Publisher de un paquete que todavía no existe.
+
+on:
+  push:
+    branches: [main]
+    paths: ["packages/ghostykit/**"]
+  workflow_dispatch:
+
+# OIDC: GitHub emite el token de identidad que npm canjea por permiso de publicar.
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      # Trusted Publishing exige npm >= 11.5.1.
+      - name: npm reciente
+        run: npm install -g npm@11
+
+      - name: Instalar
+        run: npm ci
+
+      - name: Probar, construir y publicar
+        working-directory: packages/ghostykit
+        run: |
+          npm run typecheck
+          npm test
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "$NAME@$VERSION ya está publicado — se salta."
+          else
+            npm publish --access public
+          fi
