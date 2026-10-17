@@ -24,6 +24,8 @@ export interface PilotoConfig {
   toolIcons: Record<string, PilotIcon>;
   formatUserText: (text: string) => string;
   theme: PilotTheme;
+  /** La piel: `ghosty` (default), `easybits`, `neutral` o una propia (`data-skin`). */
+  skin: string;
   markdown: MarkdownOptions;
 }
 
@@ -33,12 +35,13 @@ export const PilotoContext = createContext<PilotoConfig>({
   toolIcons: {},
   formatUserText: cleanUserText,
   theme: "light",
+  skin: "ghosty",
   markdown: {},
 });
 
 export const usePiloto = () => useContext(PilotoContext);
 
 /** Las clases de la raíz: el alcance de los estilos y el tema. Lo usan también los portales. */
-export function rootProps(theme: PilotTheme): { className: string; "data-theme": PilotTheme } {
-  return { className: "piloto", "data-theme": theme };
+export function rootProps(theme: PilotTheme, skin = "ghosty"): { className: string; "data-theme": PilotTheme; "data-skin": string } {
+  return { className: "piloto", "data-theme": theme, "data-skin": skin };
 }

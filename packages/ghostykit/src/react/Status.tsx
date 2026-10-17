@@ -15,9 +15,9 @@ const STILL_WORKING_S = 90;
 /** Los tres puntos de «escribiendo». Color y animación por CSS (`.piloto-typing`). */
 export function TypingDots() {
   return (
-    <div className="piloto-typing flex gap-1" aria-hidden>
+    <div className="piloto-typing" aria-hidden>
       {[0, 1, 2].map((i) => (
-        <span key={i} className="piloto-typing-dot h-2 w-2 rounded-full" style={{ animationDelay: `${i * 0.15}s` }} />
+        <span key={i} className="piloto-typing-dot" />
       ))}
     </div>
   );
@@ -75,7 +75,7 @@ export function WaitLabel({
               {what}
             </motion.span>
           </AnimatePresence>
-          {showDuration && <span className="tabular-nums text-text-tertiary">&nbsp;· {formatDuration(seconds)}</span>}
+          {showDuration && <span className="piloto-wait-time">{formatDuration(seconds)}</span>}
         </p>
       )}
     </div>
@@ -106,7 +106,7 @@ export function ConnectingState({ phase, error, avatar, onRetry }: { phase: Conn
           animate={error ? { scale: 1, filter: "grayscale(1)" } : { scale: [1, 1.06, 1] }}
           transition={error ? { duration: 0.3 } : { duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
         >
-          {avatar ?? <span className="piloto-avatar-default h-12 w-12 rounded-full" />}
+          {avatar ?? <span className="piloto-avatar-default" />}
         </motion.div>
       </div>
       <ol className="flex flex-col gap-3 text-left">

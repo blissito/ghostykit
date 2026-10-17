@@ -39,7 +39,7 @@
   --color-foreground: var(--piloto-text);
   --color-muted: var(--piloto-surface);
   --color-muted-foreground: var(--piloto-text-3);
-  --color-border: var(--piloto-border);
+  --color-border: var(--piloto-border-2);
   --color-sidebar: var(--piloto-surface);
   --color-primary: var(--piloto-accent-strong);
   --color-primary-foreground: var(--piloto-on-accent);

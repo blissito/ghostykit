@@ -1,6 +1,6 @@
 // El playground: un panel de crons de mentira a la izquierda (lo que la app ya tiene) y Piloto a la
 // derecha. El panel le pasa `context` (qué pantalla y qué fila ves) y referencias con «@».
-import { useMemo, useRef, useState, type CSSProperties } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Piloto, type PilotoHandle, type TurnDoneInfo } from "ghostykit";
 import { createMockTransport } from "./mockTransport";
 
@@ -10,43 +10,16 @@ const CRONS = [
   { name: "monitor", schedule: "cada 5 min", last: "hace 4 min", status: "falló" },
 ];
 
-type Skin = "ghosty" | "easybits";
-const SKINS: Record<Skin, CSSProperties> = {
-  ghosty: {},
-  // EasyBits: morado y ámbar sobre casi negro, bordes gruesos y sombra dura.
-  easybits: {
-    "--piloto-bg": "#0b0b0f",
-    "--piloto-surface": "#15151c",
-    "--piloto-surface-2": "#22222c",
-    "--piloto-text": "#f4f4f6",
-    "--piloto-text-2": "#c4c4cc",
-    "--piloto-text-3": "#8a8a96",
-    "--piloto-border": "#2e2e3a",
-    "--piloto-border-2": "#23232d",
-    "--piloto-inverse": "#f4f4f6",
-    "--piloto-text-inverse": "#0b0b0f",
-    "--piloto-accent": "#7c3aed",
-    "--piloto-accent-strong": "#7c3aed",
-    "--piloto-accent-soft": "#a78bfa",
-    "--piloto-warning": "#fbbf24",
-    "--piloto-user-bubble": "#7c3aed",
-    "--piloto-user-text": "#ffffff",
-    "--piloto-radius-bubble": "6px",
-    "--piloto-radius-card": "8px",
-    "--piloto-radius-input": "10px",
-    "--piloto-radius-button": "6px",
-    "--piloto-border-width": "2px",
-    "--piloto-shadow-card": "5px 5px 0 #fbbf24",
-    "--piloto-shadow-input": "5px 5px 0 #7c3aed",
-  } as CSSProperties,
-};
+type Skin = "ghosty" | "easybits" | "neutral";
 
 export function App() {
   const transport = useMemo(() => createMockTransport(), []);
   const pilot = useRef<PilotoHandle>(null);
-  const [skin, setSkin] = useState<Skin>("ghosty");
-  const [dark, setDark] = useState(false);
-  const [locale, setLocale] = useState<"es" | "en">("es");
+  // `?skin=easybits&dark=1&lang=en`: para compartir una combinación (y para las capturas).
+  const q = new URLSearchParams(typeof location === "undefined" ? "" : location.search);
+  const [skin, setSkin] = useState<Skin>((["ghosty", "easybits", "neutral"].includes(q.get("skin") ?? "") ? q.get("skin") : "ghosty") as Skin);
+  const [dark, setDark] = useState(q.get("dark") === "1");
+  const [locale, setLocale] = useState<"es" | "en">(q.get("lang") === "en" ? "en" : "es");
   const [selected, setSelected] = useState<string | null>(null);
   const [log, setLog] = useState<string[]>([]);
 
@@ -54,7 +27,7 @@ export function App() {
     setLog((l) => [`onTurnDone · ${info.seconds ?? "?"} s · ${info.text.length} letras${info.interrupted ? " · interrumpido" : ""}`, ...l].slice(0, 4));
 
   return (
-    <div className={`demo ${skin === "easybits" || dark ? "demo-dark" : ""}`}>
+    <div className={`demo ${dark ? "demo-dark" : ""}`}>
       <aside className="panel">
         <header>
           <h1>
@@ -68,10 +41,11 @@ export function App() {
             <select value={skin} onChange={(e) => setSkin(e.target.value as Skin)}>
               <option value="ghosty">Ghosty</option>
               <option value="easybits">EasyBits</option>
+              <option value="neutral">Neutral</option>
             </select>
           </label>
           <label>
-            <input type="checkbox" checked={dark} onChange={(e) => setDark(e.target.checked)} disabled={skin === "easybits"} /> oscuro
+            <input type="checkbox" checked={dark} onChange={(e) => setDark(e.target.checked)} /> oscuro
           </label>
           <label>
             Idioma
@@ -126,8 +100,8 @@ export function App() {
           transport={transport}
           agentName="Asistente de admin"
           locale={locale}
-          theme={skin === "easybits" || dark ? "dark" : "light"}
-          style={SKINS[skin]}
+          theme={dark ? "dark" : "light"}
+          skin={skin}
           welcome={locale === "en" ? "How can I help with your crons?" : "¿En qué te ayudo con tus crons?"}
           suggestions={
             locale === "en"

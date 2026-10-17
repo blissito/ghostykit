@@ -71,6 +71,8 @@ export interface PilotoProps extends UsePilotOptions {
   locale?: "es" | "en";
   strings?: Partial<PilotStrings>;
   theme?: PilotTheme;
+  /** La piel: `ghosty` (default), `easybits`, `neutral`, o el nombre de una propia (`[data-skin]`). */
+  skin?: string;
   className?: string;
   style?: CSSProperties;
   toolVerbs?: ToolVerbs;
@@ -129,9 +131,10 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
       toolIcons: props.toolIcons ?? {},
       formatUserText: props.formatUserText ?? cleanUserText,
       theme,
+      skin: props.skin ?? "ghosty",
       markdown: props.markdown ?? {},
     }),
-    [strings, locale, props.toolVerbs, props.toolIcons, props.formatUserText, theme, props.markdown],
+    [strings, locale, props.toolVerbs, props.toolIcons, props.formatUserText, theme, props.skin, props.markdown],
   );
   const t = strings;
 
@@ -176,7 +179,27 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
     [send, setRefs],
   );
 
-  const respond = (id: string, optionId: string) => pilot.respondPermission(id, optionId, props.onPermission);
+  // Una tarjeta contestada se queda a la vista mientras cae su sello, aunque el stream ya la haya
+  // retirado (`permission-resolved` llega antes de que la app termine de contestar).
+  const [held, setHeld] = useState<Record<string, PermissionRequest>>({});
+  const releaseHeld = (id: string) => setHeld(({ [id]: _, ...rest }) => rest);
+  const respond = async (id: string, optionId: string) => {
+    const req = permissions.find((p) => p.id === id);
+    if (req) setHeld((h) => ({ ...h, [id]: req }));
+    const handler = props.onPermission ?? (transport?.respondPermission ? (a: string, b: string) => transport.respondPermission!(a, b) : undefined);
+    if (!handler) throw new Error("ghostykit: falta `onPermission` (el transporte no contesta permisos)");
+    try {
+      return await handler(id, optionId);
+    } catch (e) {
+      releaseHeld(id);
+      throw e;
+    }
+  };
+  const settle = (id: string, optionId: string, answer: Parameters<Pilot["recordDecision"]>[2]) => {
+    pilot.recordDecision(id, optionId, answer, held[id]);
+    releaseHeld(id);
+  };
+  const cards = [...permissions, ...Object.values(held).filter((h) => !permissions.some((p) => p.id === h.id))];
 
   // ── Scroll ──────────────────────────────────────────────────────────────────
   const scroller = useRef<HTMLDivElement>(null);
@@ -307,11 +330,13 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
     </div>
   );
 
-  const permissionCards = permissions.map((p: PermissionRequest) => <ConfirmCard key={p.id} request={p} onRespond={respond} onExpire={pilot.expirePermission} />);
+  const permissionCards = cards.map((p: PermissionRequest) => (
+    <ConfirmCard key={p.id} request={p} onRespond={respond} onSettled={settle} onExpire={pilot.expirePermission} />
+  ));
 
   return (
     <PilotoContext.Provider value={config}>
-      <div {...rootProps(theme)} data-busy={busy || undefined} className={`piloto ${props.className ?? ""}`} style={props.style}>
+      <div {...rootProps(theme, props.skin)} data-busy={busy || undefined} className={`piloto ${props.className ?? ""}`} style={props.style}>
         {empty ? (
           <div className="piloto-empty flex min-h-0 flex-1 flex-col items-center justify-center px-4 pb-[8vh]">
             {slots.headerActions && <div className="absolute right-4 top-3 flex gap-2">{slots.headerActions}</div>}
@@ -371,7 +396,7 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
                   );
                 })}
                 {permissionCards}
-                {busy && !toolRunning && !permissions.length && (
+                {busy && !toolRunning && !cards.length && (
                   <div className="flex flex-col gap-1.5">
                     <TypingDots />
                     <WaitLabel phase={phase} since={state.turnStartedAt} elsewhere={state.elsewhere} onLost={pilot.abandonAndRetry} showDuration={features.duration !== false} />

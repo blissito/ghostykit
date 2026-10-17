@@ -1,5 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import "ghostykit/fonts.css";
 import "ghostykit/styles.css";
 import "./demo.css";
 import { App } from "./App";

@@ -97,14 +97,14 @@ export function AgentSteps({ tools, live }: { tools: ToolEntry[]; live: boolean 
   const shown = groups.slice(-VISIBLE);
   const hidden = groups.length - shown.length;
   return (
-    <div className="piloto-steps mb-3 rounded-(--piloto-radius-card) border px-3 py-2.5 transition-[background-color,border-color] duration-300" data-live={live || undefined}>
+    <div className="piloto-steps mb-3 rounded-(--piloto-radius-card) px-3 py-2.5 transition-[background-color,border-color] duration-300" data-live={live || undefined}>
       <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} title={open ? t.stepsCollapse : t.stepsExpand} className="block w-full cursor-pointer text-left">
         {open ? (
           <span className="flex items-center gap-1.5 text-xs font-medium text-text-primary">
             <ChevronRight className="h-3.5 w-3.5 shrink-0 rotate-90 text-text-tertiary" />
             <span className="truncate">
               {summarizeTools(tools, toolVerbs)}
-              {failed > 0 && <span className="text-text-danger"> · {t.withProblems(failed)}</span>}
+              {failed > 0 && <span className="text-text-danger">, {t.withProblems(failed)}</span>}
             </span>
           </span>
         ) : (
@@ -148,7 +148,7 @@ function StepLine({ tool, times, live }: { tool: ToolEntry; times: number; live:
       <Icon className="h-[22px] w-[22px] shrink-0 text-text-secondary" />
       <span className="min-w-0 truncate">
         <span className={spins ? "text-text-primary" : undefined}>{label}</span>
-        {tool.detail && <span className="text-text-tertiary"> · {tool.detail}</span>}
+        {tool.detail && <span className="piloto-step-detail">{tool.detail}</span>}
         {times > 1 && <span className="ml-1 tabular-nums text-text-tertiary">×{times}</span>}
       </span>
     </li>

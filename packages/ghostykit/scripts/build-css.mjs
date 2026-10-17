@@ -23,18 +23,11 @@ execFileSync(process.execPath, [join(pkg, "../../node_modules/@tailwindcss/cli/d
 const SCOPE = ".piloto";
 
 /** `:root, :host` → `.piloto`; todo lo demás → `.piloto <selector>` (salvo lo que ya empieza con `.piloto`). */
-function scopeSelector(sel) {
-  return sel
-    .split(",")
-    .map((s) => s.trim())
-    .map((s) => {
-      if (!s) return s;
-      if (s === ":root" || s === ":host" || s === "html") return SCOPE;
-      if (s.startsWith(SCOPE)) return s;
-      return `${SCOPE} ${s}`;
-    })
-    .filter((s, i, all) => all.indexOf(s) === i)
-    .join(", ");
+function scopeOne(sel) {
+  const s = sel.trim();
+  if (s === ":root" || s === ":host" || s === "html") return SCOPE;
+  if (s.startsWith(SCOPE)) return s;
+  return `${SCOPE} ${s}`;
 }
 
 const scope = {
@@ -48,7 +41,8 @@ const scope = {
     root.walkRules((rule) => {
       // Los pasos de un @keyframes (`from`, `50%`) no son selectores.
       if (rule.parent?.type === "atrule" && /keyframes$/.test(rule.parent.name)) return;
-      rule.selector = scopeSelector(rule.selector);
+      // `rule.selectors` parte bien las comas escapadas (`.max-h-\\[min\\(70vh\\,40rem\\)\\]`).
+      rule.selectors = [...new Set(rule.selectors.map(scopeOne))];
     });
   },
 };
@@ -57,6 +51,8 @@ const tw = readFileSync(tmp, "utf8");
 const scoped = (await postcss([scope]).process(tw, { from: tmp })).css;
 const base = readFileSync(join(pkg, "src/styles/base.css"), "utf8");
 const banner = "/* ghostykit — Piloto UI · MIT · https://github.com/blissito/ghostykit */\n";
-writeFileSync(join(pkg, "dist/styles.css"), `${banner}${base}\n/* ── Utilidades (Tailwind ${"v4"}, encerradas en .piloto) ── */\n${scoped}`);
+// La piel va DESPUÉS: a igual especificidad, sus piezas con nombre ganan a las utilidades.
+writeFileSync(join(pkg, "dist/styles.css"), `${banner}/* ── Utilidades (Tailwind v4, encerradas en .piloto) ── */\n${scoped}\n/* ── La piel ── */\n${base}`);
+writeFileSync(join(pkg, "dist/fonts.css"), readFileSync(join(pkg, "src/styles/fonts.css"), "utf8"));
 rmSync(dirname(tmp), { recursive: true, force: true });
 console.log(`dist/styles.css  ${(Buffer.byteLength(base + scoped) / 1024).toFixed(1)}kb`);

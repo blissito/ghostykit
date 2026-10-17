@@ -8,7 +8,7 @@ import { ChunkedBlock, ChunksContext, useChunkRegistry } from "./TextAtPace";
 
 /** El aviso de enlace externo, en la lengua y el tema de Piloto (el de Streamdown llega en inglés). */
 export function LinkSafetyModal({ isOpen, onClose, onConfirm, url }: LinkSafetyModalProps) {
-  const { strings: t, theme } = usePiloto();
+  const { strings: t, theme, skin } = usePiloto();
   const [copied, setCopied] = useState(false);
   if (!isOpen) return null;
   const copy = async () => {
@@ -22,7 +22,7 @@ export function LinkSafetyModal({ isOpen, onClose, onConfirm, url }: LinkSafetyM
   };
   // Streamdown lo monta en un portal, fuera de `.piloto`: se re-abre el alcance aquí.
   return (
-    <div {...rootProps(theme)} style={{ display: "contents" }}>
+    <div {...rootProps(theme, skin)} style={{ display: "contents" }}>
       <div className="piloto-overlay fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 px-4" onClick={onClose} role="presentation">
         <div
           className="piloto-dialog w-full max-w-md rounded-(--piloto-radius-card) border border-border-primary bg-background-primary p-6 text-text-primary shadow-(--piloto-shadow-card)"

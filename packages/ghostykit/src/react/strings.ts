@@ -78,6 +78,9 @@ export interface PilotStrings {
   decisionApproved: string;
   decisionRejected: string;
   decisionExpired: string;
+  stampApproved: string;
+  stampRejected: string;
+  stampExpired: string;
 }
 
 export const STRINGS_ES: PilotStrings = {
@@ -154,7 +157,7 @@ export const STRINGS_ES: PilotStrings = {
   linkOpen: "Abrir",
   close: "Cerrar",
   goToLatest: "Ir al último mensaje",
-  confirmTitle: "El agente pide tu permiso",
+  confirmTitle: "Necesito tu permiso para",
   approve: "Aprobar",
   reject: "Rechazar",
   confirmExpired: "Este pedido ya no estaba abierto (se agotó el plazo).",
@@ -164,6 +167,9 @@ export const STRINGS_ES: PilotStrings = {
   decisionApproved: "Aprobaste",
   decisionRejected: "Rechazaste",
   decisionExpired: "Venció",
+  stampApproved: "Aprobado",
+  stampRejected: "Rechazado",
+  stampExpired: "Vencido",
 };
 
 export const STRINGS_EN: PilotStrings = {
@@ -240,7 +246,7 @@ export const STRINGS_EN: PilotStrings = {
   linkOpen: "Open",
   close: "Close",
   goToLatest: "Go to latest message",
-  confirmTitle: "The agent asks for your permission",
+  confirmTitle: "I need your permission to",
   approve: "Approve",
   reject: "Reject",
   confirmExpired: "This request was no longer open (it timed out).",
@@ -250,4 +256,7 @@ export const STRINGS_EN: PilotStrings = {
   decisionApproved: "You approved",
   decisionRejected: "You rejected",
   decisionExpired: "Expired",
+  stampApproved: "Approved",
+  stampRejected: "Rejected",
+  stampExpired: "Expired",
 };

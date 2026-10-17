@@ -17,7 +17,7 @@ import {
   sendRejectedBusy,
   stopTurn,
 } from "../core/reducer";
-import type { Attachment, Interrupted, PilotState, Reference, SendInput, Turn } from "../core/types";
+import type { Attachment, Interrupted, PermissionRequest, PilotState, Reference, SendInput, Turn } from "../core/types";
 import { createSseTransport, type PilotTransport, type SseTransportOptions } from "../transport";
 
 export interface TurnDoneInfo {
@@ -72,6 +72,8 @@ export interface Pilot {
    * sesión); sin él, `transport.respondPermission`. La decisión queda anotada en la respuesta.
    */
   respondPermission: (id: string, optionId: string, via?: PermissionHandler) => Promise<PermissionAnswer>;
+  /** Anota lo que ya contestó la app (sin volver a contestar): la tarjeta sale y queda la decisión. */
+  recordDecision: (id: string, optionId: string, answer: PermissionAnswer, asked?: PermissionRequest) => void;
   /** Una tarjeta que venció sin contestarse: sale de las abiertas como «venció». */
   expirePermission: (id: string) => void;
   /** Un mensaje del agente que llegó fuera de un turno: espera a que cierre el turno vivo. */
@@ -243,6 +245,12 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
     [commit],
   );
 
+  const recordDecision = useCallback(
+    (id: string, optionId: string, r: PermissionAnswer, asked?: PermissionRequest) =>
+      commit(resolvePermission(ref.current, id, optionId, r ? r.resolved !== false : true, r ? r.detail : undefined, asked)),
+    [commit],
+  );
+
   const expirePermission = useCallback(
     (id: string) => {
       if (ref.current.permissions.some((p) => p.id === id)) commit(resolvePermission(ref.current, id, "", false));
@@ -261,7 +269,7 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
     [commit],
   );
 
-  return { state, send, stop, retry, abandonAndRetry, resume, setModel, respondPermission, expirePermission, appendAgentMessage };
+  return { state, send, stop, retry, abandonAndRetry, resume, setModel, respondPermission, recordDecision, expirePermission, appendAgentMessage };
 }
 
 /** Un transporte SSE estable por `base` (crearlo en cada render reabriría el stream). */

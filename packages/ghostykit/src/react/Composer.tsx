@@ -371,7 +371,7 @@ export function Composer({
     "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-background-secondary hover:text-text-primary disabled:opacity-30";
 
   return (
-    <div className="piloto-composer rounded-(--piloto-radius-input) border-(length:--piloto-border-width) transition-colors">
+    <div className="piloto-composer rounded-(--piloto-radius-input)">
       <div className="flex flex-col gap-2 p-3">
         {withFiles && dragging && (
           <div className="piloto-drop pointer-events-none fixed inset-0 z-[1000] flex items-center justify-center p-6">
