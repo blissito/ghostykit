@@ -31,7 +31,7 @@ import { ConfirmCard } from "./ConfirmCard";
 import { PilotoContext, rootProps, type MarkdownOptions, type PilotIcon, type PilotoConfig, type PilotTheme } from "./context";
 import { ConnectingState, TypingDots, WaitLabel } from "./Status";
 import { STRINGS_EN, STRINGS_ES, type PilotStrings } from "./strings";
-import { usePilot, type Pilot, type UsePilotOptions } from "./usePilot";
+import { usePilot, type PermissionHandler, type Pilot, type UsePilotOptions } from "./usePilot";
 
 export interface PilotoFeatures {
   /** Botones de adjuntar. Default: sí si hay `upload`. */
@@ -87,8 +87,11 @@ export interface PilotoProps extends UsePilotOptions {
   transcribe?: (audio: Blob) => Promise<string>;
   voiceNoteText?: (transcript: string) => string;
   features?: PilotoFeatures;
-  /** Contestar un permiso. Default: `transport.respondPermission`. */
-  onPermission?: (id: string, optionId: string) => Promise<{ resolved: boolean } | void> | void;
+  /**
+   * Contestar un permiso (p. ej. el POST de aprobación de la app, con su sesión). Default:
+   * `transport.respondPermission`. Devuelve `{resolved:false}` si ya no estaba abierto.
+   */
+  onPermission?: PermissionHandler;
   /** Referencias controladas (si no, Piloto las guarda; agrégalas con `ref.addReference`). */
   references?: Reference[];
   onReferencesChange?: (refs: Reference[]) => void;
@@ -173,7 +176,7 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
     [send, setRefs],
   );
 
-  const respond = props.onPermission ?? ((id: string, optionId: string) => pilot.respondPermission(id, optionId));
+  const respond = (id: string, optionId: string) => pilot.respondPermission(id, optionId, props.onPermission);
 
   // ── Scroll ──────────────────────────────────────────────────────────────────
   const scroller = useRef<HTMLDivElement>(null);
@@ -286,6 +289,7 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
         onSubmit={send}
         onStop={pilot.stop}
         busy={busy}
+        canSteer={(external ? true : transport?.steer) !== false}
         placeholder={placeholder}
         canSeeImages={state.canSeeImages}
         attachments={showFiles}
@@ -303,7 +307,7 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
     </div>
   );
 
-  const permissionCards = permissions.map((p: PermissionRequest) => <ConfirmCard key={p.id} request={p} onRespond={respond} />);
+  const permissionCards = permissions.map((p: PermissionRequest) => <ConfirmCard key={p.id} request={p} onRespond={respond} onExpire={pilot.expirePermission} />);
 
   return (
     <PilotoContext.Provider value={config}>

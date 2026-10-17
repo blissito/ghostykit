@@ -70,6 +70,12 @@ export interface PilotStrings {
   reject: string;
   confirmExpired: string;
   confirmFailed: string;
+  /** «Vence en 14:32». */
+  expiresIn: (mmss: string) => string;
+  expiredNow: string;
+  decisionApproved: string;
+  decisionRejected: string;
+  decisionExpired: string;
 }
 
 export const STRINGS_ES: PilotStrings = {
@@ -150,6 +156,11 @@ export const STRINGS_ES: PilotStrings = {
   reject: "Rechazar",
   confirmExpired: "Este pedido ya no estaba abierto (se agotó el plazo).",
   confirmFailed: "No se pudo mandar tu respuesta. Intenta de nuevo.",
+  expiresIn: (t) => `Vence en ${t}`,
+  expiredNow: "Venció sin respuesta",
+  decisionApproved: "Aprobaste",
+  decisionRejected: "Rechazaste",
+  decisionExpired: "Venció",
 };
 
 export const STRINGS_EN: PilotStrings = {
@@ -230,4 +241,9 @@ export const STRINGS_EN: PilotStrings = {
   reject: "Reject",
   confirmExpired: "This request was no longer open (it timed out).",
   confirmFailed: "Couldn't send your answer. Try again.",
+  expiresIn: (t) => `Expires in ${t}`,
+  expiredNow: "Expired without an answer",
+  decisionApproved: "You approved",
+  decisionRejected: "You rejected",
+  decisionExpired: "Expired",
 };

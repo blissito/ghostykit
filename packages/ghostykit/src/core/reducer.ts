@@ -10,6 +10,7 @@ import { reconcileTurns } from "./reconcile";
 import type {
   Attachment,
   ConnectPhase,
+  Decision,
   Delivery,
   Interrupted,
   ModelOption,
@@ -134,6 +135,8 @@ export function reducePilotEvent(prev: PilotState, name: string, data: unknown, 
       const connections = s.connections + 1;
       const heartbeatMs = typeof d.latidoMs === "number" && d.latidoMs > 0 ? d.latidoMs : null;
       let next: PilotState = { ...s, connections, connected: true, heartbeatMs };
+      // Contrato de un POST que devuelve el stream (EasyBits): `started` trae el turno de este cliente.
+      if (typeof d.turnId === "string" && s.turnStartedAt && !s.currentTurnId) next.currentTurnId = d.turnId;
       // Reconexión con un turno en vuelo: el servidor repinta lo que lleva. Se quita la burbuja en
       // curso para que no salga dos veces.
       if (connections > 1 && s.turnStartedAt && s.streaming) {
@@ -239,7 +242,26 @@ export function reducePilotEvent(prev: PilotState, name: string, data: unknown, 
       return patchCurrent(s, (t) => ({ ...t, thought: (t.thought ?? "") + d.text }));
     case "tool":
       if (!isObj(data)) return s;
-      return upsertTool(stillAlive(s), toToolEntry(d));
+      return upsertTool(stillAlive(s), toToolEntry(d.id == null ? { ...d, id: syntheticToolId(s, d) } : d));
+    case "snapshot":
+      if (!isObj(data)) return s;
+      return reduceSnapshot(s, d, now);
+    case "idle": {
+      // No hay turno vivo en el servidor. Si este cliente esperaba uno, se perdió.
+      if (!s.turnStartedAt) return s;
+      return closeCut(s, "se cortó la conexión", undefined, undefined, now);
+    }
+    case "interrupted": {
+      if (!isObj(data)) return s;
+      const turnId = typeof d.turnId === "string" ? d.turnId : undefined;
+      return closeCut(s, typeof d.reason === "string" ? d.reason : "se interrumpió", turnId, d.canContinue === true, now);
+    }
+    case "capacity": {
+      // Sin lugar ahora mismo: se dice y el turno se suelta (se puede volver a mandar en un rato).
+      if (!isObj(data)) return s;
+      const message = typeof d.message === "string" && d.message ? d.message : "No hay capacidad ahora mismo. Intenta en un momento.";
+      return reduceDone({ ...s, error: message }, { turnId: d.turnId }, now);
+    }
     case "artifact":
       if (!isObj(data)) return s;
       return patchCurrent(s, (t) => ({ ...t, deliveries: [...(t.deliveries ?? []), toDelivery(d)] }));
@@ -256,7 +278,7 @@ export function reducePilotEvent(prev: PilotState, name: string, data: unknown, 
     case "permission": {
       if (!isObj(data) || typeof d.id !== "string") return s;
       // Los permisos abiertos se reenvían en CADA suscripción: se reemplazan por id, sin duplicar.
-      const req: PermissionRequest = { id: d.id, title: String(d.title ?? ""), tool: d.tool, options: Array.isArray(d.options) ? d.options : [] };
+      const req: PermissionRequest = { id: d.id, title: String(d.title ?? ""), tool: d.tool, options: Array.isArray(d.options) ? d.options : [], ...(d.expiresAt != null ? { expiresAt: d.expiresAt } : {}) };
       const i = s.permissions.findIndex((p) => p.id === req.id);
       const permissions = i === -1 ? [...s.permissions, req] : s.permissions.map((p, k) => (k === i ? req : p));
       return { ...s, permissions };
@@ -264,8 +286,15 @@ export function reducePilotEvent(prev: PilotState, name: string, data: unknown, 
     case "permission-resolved":
       if (!isObj(data)) return s;
       return { ...s, permissions: s.permissions.filter((p) => p.id !== d.id) };
-    case "done":
-      return reduceDone(s, d, now);
+    case "done": {
+      // `done{text}` (EasyBits): la respuesta final. Sólo pinta si no llegó nada por `chunk`.
+      let next = s;
+      const last = s.turns[s.turns.length - 1];
+      if (typeof d.text === "string" && d.text && s.turnStartedAt && !(s.streaming && last?.role === "assistant" && last.text)) {
+        next = patchCurrent(s, (t) => ({ ...t, text: d.text }));
+      }
+      return reduceDone(next, d, now);
+    }
     case "warning":
       if (!isObj(data) || typeof d.message !== "string") return s;
       return { ...s, notice: d.message };
@@ -281,6 +310,70 @@ export function reducePilotEvent(prev: PilotState, name: string, data: unknown, 
 }
 
 /**
+ * Al cerrar un turno, sus permisos se van (en ACP el turno ESPERA al permiso: si cerró, ya se
+ * resolvió). Los que traen `expiresAt` vigente no dependen del turno y se quedan.
+ */
+function keepIndependent(perms: PermissionRequest[], now: number): PermissionRequest[] {
+  return perms.filter((p) => p.expiresAt !== undefined && expiryMs(p.expiresAt) > now);
+}
+
+/** `expiresAt` (ISO o epoch ms) → epoch ms. */
+export function expiryMs(v: string | number): number {
+  return typeof v === "number" ? v : Date.parse(v);
+}
+
+/** Un turno que se cortó: «Me quedé a medias» + Retomar. */
+function closeCut(s: PilotState, reason: string, turnId?: string, canContinue?: boolean, now: number = Date.now()): PilotState {
+  return {
+    ...s,
+    elsewhere: false,
+    streaming: false,
+    busy: false,
+    turnStartedAt: 0,
+    error: null,
+    notice: null,
+    permissions: keepIndependent(s.permissions, now),
+    interrupted: { reason, turnId, ...(canContinue ? { canContinue } : {}) } as Interrupted,
+    effects: [{ type: "turn-interrupted", reason, turnId }],
+  };
+}
+
+/**
+ * Un paso sin `id` (EasyBits manda sólo `title` + `status`): el que arranca abre uno nuevo; el que
+ * termina cierra el ÚLTIMO del mismo título que siga corriendo.
+ */
+function syntheticToolId(s: PilotState, d: Obj): string {
+  const last = s.streaming ? s.turns[s.turns.length - 1] : undefined;
+  const tools = last?.role === "assistant" ? (last.tools ?? []) : [];
+  if (d.status !== "in_progress" && d.status !== "pending") {
+    for (let i = tools.length - 1; i >= 0; i--) {
+      const t = tools[i];
+      if (t.title === d.title && t.status !== "completed" && t.status !== "failed") return t.id;
+    }
+  }
+  return `tool-${tools.length + 1}`;
+}
+
+/**
+ * `snapshot{turnId, text, tools: string[], cortes}`: el estado entero de un turno vivo, al
+ * re-engancharse (EasyBits `?attach=1`). Repinta la burbuja en curso y marca el turno como vivo.
+ */
+function reduceSnapshot(s0: PilotState, d: Obj, now: number): PilotState {
+  const names: string[] = Array.isArray(d.tools) ? d.tools.filter((x: unknown) => typeof x === "string") : [];
+  const tools: ToolEntry[] = names.map((title, i) => ({ id: `tool-${i + 1}`, title, status: i === names.length - 1 ? "in_progress" : "completed" }));
+  const cuts = Array.isArray(d.cortes) ? d.cortes.filter((x: unknown) => typeof x === "number") : undefined;
+  let s: PilotState = {
+    ...stillAlive(s0),
+    busy: true,
+    phase: "session",
+    turnStartedAt: s0.turnStartedAt || now,
+    currentTurnId: typeof d.turnId === "string" ? d.turnId : s0.currentTurnId,
+  };
+  s = patchCurrent(s, (t) => ({ ...t, text: typeof d.text === "string" ? d.text : t.text, tools, ...(cuts?.length ? { cuts } : {}) }));
+  return s;
+}
+
+/**
  * `done`. `reposo: true` = el servidor no tiene turno vivo en este hilo: llega al abrir el stream
  * (normal) y al RECONECTAR tras un reinicio. Trae, si aplica, qué pasó con el último turno:
  * `interrumpido` (se cortó por falla del servidor) o `ultimo` (terminó sin este cliente conectado).
@@ -289,17 +382,7 @@ function reduceDone(s0: PilotState, d: Obj, now: number): PilotState {
   let s: PilotState = { ...s0, elsewhere: false };
   const waiting = Boolean(s.turnStartedAt);
   const isMine = (id?: string) => id != null && id === s.currentTurnId;
-  const cut = (reason: string, turnId?: string): PilotState => ({
-    ...s,
-    streaming: false,
-    busy: false,
-    turnStartedAt: 0,
-    error: null,
-    notice: null,
-    permissions: [],
-    interrupted: { reason, turnId } as Interrupted,
-    effects: [{ type: "turn-interrupted", reason, turnId }],
-  });
+  const cut = (reason: string, turnId?: string): PilotState => closeCut(s, reason, turnId, undefined, now);
   const interrupted = isObj(d.interrumpido) ? (d.interrumpido as Obj) : null;
   if (!waiting) {
     // Sin turno encargado por este cliente (abrir el hilo, F5, o un turno de otra superficie): si el
@@ -323,7 +406,7 @@ function reduceDone(s0: PilotState, d: Obj, now: number): PilotState {
     if (text) s = patchCurrent(s, (t) => ({ ...t, text }));
   }
   const effects: PilotEffect[] = [];
-  s = { ...s, streaming: false, busy: false, permissions: [] };
+  s = { ...s, streaming: false, busy: false, permissions: keepIndependent(s.permissions, now) };
   if (s.needAccount) {
     s = { ...s, needAccount: false };
     effects.push({ type: "needs-login" });
@@ -404,6 +487,34 @@ export function dropLastExchange(prev: PilotState): PilotState {
   const turns = [...prev.turns];
   while (turns.length && turns[turns.length - 1].role === "assistant") turns.pop();
   return { ...prev, turns: turns.slice(0, -1), streaming: false, effects: [] };
+}
+
+/**
+ * El usuario contestó una tarjeta: sale de las abiertas y queda anotada en la última respuesta
+ * («Aprobaste: correr la purga»). `resolved: false` = ya no estaba abierta (venció o la contestó otro).
+ */
+export function resolvePermission(
+  prev: PilotState,
+  id: string,
+  optionId: string,
+  resolved: boolean,
+  detail?: string,
+  /** La tarjeta como estaba al contestarla (el stream pudo retirarla mientras tanto). */
+  asked?: PermissionRequest,
+): PilotState {
+  const req = prev.permissions.find((p) => p.id === id) ?? asked;
+  let s: PilotState = { ...prev, effects: [], permissions: prev.permissions.filter((p) => p.id !== id) };
+  if (!req) return s;
+  const option = req.options.find((o) => o.optionId === optionId);
+  const rejected = /^reject|deny|cancel/i.test(option?.kind ?? optionId);
+  const decision: Decision = { id, title: req.title, status: !resolved ? "expired" : rejected ? "rejected" : "approved", ...(detail ? { detail } : {}) };
+  const turns = [...s.turns];
+  let i = turns.length - 1;
+  while (i >= 0 && turns[i].role !== "assistant") i--;
+  if (i >= 0) turns[i] = { ...turns[i], decisions: [...(turns[i].decisions ?? []), decision] };
+  else turns.push({ role: "assistant", text: "", decisions: [decision] });
+  s = { ...s, turns };
+  return s;
 }
 
 /** Un mensaje del agente que entró fuera de un turno (el remate de los subagentes). */

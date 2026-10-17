@@ -6,7 +6,7 @@ import type { PilotListener, PilotTransport, SendInput } from "ghostykit";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 type Script = (ctx: { emit: (name: string, data?: unknown) => void; ask: (req: Permission) => Promise<string>; input: SendInput }) => Promise<void>;
-type Permission = { id: string; title: string; tool?: string; options: { optionId: string; name: string; kind?: string }[] };
+type Permission = { id: string; title: string; tool?: string; expiresAt?: string; options: { optionId: string; name: string; kind?: string }[] };
 
 /** Escribe un texto en pedacitos, como llega de un modelo real. */
 async function stream(emit: (name: string, data?: unknown) => void, text: string, turnId: string) {
@@ -42,6 +42,7 @@ const cronsTurn: Script = async ({ emit, ask, input }) => {
     id: `p-${turnId}`,
     title: "Correr ahora la purga de notificaciones (purge-notifications)",
     tool: "run_cron",
+    expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(),
     options: [
       { optionId: "allow", name: "Aprobar y correr", kind: "allow_once" },
       { optionId: "deny", name: "Rechazar", kind: "reject_once" },

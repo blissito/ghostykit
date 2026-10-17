@@ -109,6 +109,8 @@ export interface Turn {
   cuts?: number[];
   attachments?: Attachment[];
   usage?: Usage;
+  /** Lo que el usuario decidió en las tarjetas de permiso de este turno (sólo en vivo). */
+  decisions?: Decision[];
   /** Mensaje del usuario que ENTRÓ al turno en vuelo (steer): la respuesta sigue arriba. */
   steer?: boolean;
   pages?: PageBuild[];
@@ -121,6 +123,17 @@ export interface Turn {
 export interface Interrupted {
   reason: string;
   turnId?: string;
+  /** El servidor puede CONTINUAR ese turno (EasyBits: `continueTurnId`). */
+  canContinue?: boolean;
+}
+
+/** Una tarjeta de permiso ya contestada. */
+export interface Decision {
+  id: string;
+  title: string;
+  status: "approved" | "rejected" | "expired";
+  /** Lo que devolvió la app al resolverla (p. ej. «ejecutada»). */
+  detail?: string;
 }
 
 /** Una opción de un pedido de permiso, tal cual la manda el agente (ACP). */
@@ -137,6 +150,11 @@ export interface PermissionRequest {
   title: string;
   tool?: string;
   options: PermissionOption[];
+  /**
+   * Hasta cuándo se puede contestar (ISO o epoch ms). Una tarjeta CON vencimiento no depende del
+   * turno (EasyBits: la propuesta vive 15 min aunque el turno ya cerró) y sobrevive al `done`.
+   */
+  expiresAt?: string | number;
 }
 
 /** Lo que una transición pide hacer FUERA del estado (avisos a la app). */
@@ -191,6 +209,8 @@ export interface SendInput {
   firstTurn: boolean;
   /** «Retomar» un turno cortado: el servidor arma la continuación. */
   resume?: boolean;
+  /** Con `resume`: el turno a continuar, si el servidor lo dijo (`interrupted.turnId`). */
+  resumeTurnId?: string;
   /** Lo que el usuario ve en pantalla, para este turno. */
   context?: unknown;
   /** Las referencias que viajaron en el texto, también estructuradas. */

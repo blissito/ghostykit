@@ -10,6 +10,7 @@ import {
   lastUserTurn,
   reconcileWith,
   reducePilotEvent,
+  resolvePermission,
   resumeMode,
   sendAccepted,
   sendFailed,
@@ -50,6 +51,7 @@ export interface UsePilotOptions {
 
 export interface SendOptions {
   resume?: boolean;
+  resumeTurnId?: string;
   references?: Reference[];
 }
 
@@ -64,10 +66,20 @@ export interface Pilot {
   /** «Retomar» un turno cortado por el servidor. */
   resume: () => void;
   setModel: (value: string) => void;
-  respondPermission: (id: string, optionId: string) => Promise<{ resolved: boolean }>;
+  /**
+   * Contesta una tarjeta. `via` = cómo la contesta la app (p. ej. su ruta de aprobación con la
+   * sesión); sin él, `transport.respondPermission`. La decisión queda anotada en la respuesta.
+   */
+  respondPermission: (id: string, optionId: string, via?: PermissionHandler) => Promise<PermissionAnswer>;
+  /** Una tarjeta que venció sin contestarse: sale de las abiertas como «venció». */
+  expirePermission: (id: string) => void;
   /** Un mensaje del agente que llegó fuera de un turno: espera a que cierre el turno vivo. */
   appendAgentMessage: (text: string) => void;
 }
+
+/** Lo que contesta la app al resolver una tarjeta. `resolved: false` = ya no estaba abierta. */
+export type PermissionAnswer = { resolved: boolean; detail?: string } | void;
+export type PermissionHandler = (id: string, optionId: string) => Promise<PermissionAnswer> | PermissionAnswer;
 
 const message = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
 
@@ -108,13 +120,32 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
 
   useEffect(() => {
     if (!transport) return;
-    return transport.subscribe(
-      (name, data) => {
-        optsRef.current.onEvent?.(name, data);
-        commit(reducePilotEvent(ref.current, name, data));
-      },
-      { isBusy: () => ref.current.busy },
-    );
+    let off: (() => void) | null = null;
+    let gone = false;
+    const subscribe = () => {
+      if (gone) return;
+      off = transport.subscribe(
+        (name, data) => {
+          optsRef.current.onEvent?.(name, data);
+          commit(reducePilotEvent(ref.current, name, data));
+        },
+        { isBusy: () => ref.current.busy },
+      );
+    };
+    // El hilo guardado ANTES del stream: si hay un turno vivo, su `snapshot` va debajo.
+    if (transport.history && !optsRef.current.initialTurns) {
+      transport
+        .history()
+        .then((turns) => {
+          if (!gone && turns.length && !ref.current.turns.length) commit({ ...ref.current, turns, effects: [] });
+        })
+        .catch(() => {})
+        .finally(subscribe);
+    } else subscribe();
+    return () => {
+      gone = true;
+      off?.();
+    };
   }, [transport, commit]);
 
   // La copia del hilo cambió: trae los mensajes que se mandaron desde OTRO cliente. Sólo en reposo.
@@ -139,6 +170,7 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
         attachments,
         firstTurn: s0.turns.length === 0,
         ...(extra.resume ? { resume: true } : {}),
+        ...(extra.resumeTurnId ? { resumeTurnId: extra.resumeTurnId } : {}),
         ...(extra.references?.length ? { references: extra.references } : {}),
         ...(ctx !== undefined ? { context: typeof ctx === "function" ? (ctx as () => unknown)() : ctx } : {}),
       };
@@ -180,7 +212,7 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
     if (s.busy) return;
     commit({ ...s, interrupted: null, effects: [] });
     if (resumeMode(s.turns) === "resend") abandonAndRetry();
-    else void send(RESUME_TEXT, [], { resume: true });
+    else void send(RESUME_TEXT, [], { resume: true, resumeTurnId: s.interrupted?.turnId });
   }, [commit, send, abandonAndRetry]);
 
   const setModel = useCallback(
@@ -193,13 +225,22 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
   );
 
   const respondPermission = useCallback(
-    async (id: string, optionId: string) => {
+    async (id: string, optionId: string, via?: PermissionHandler) => {
       const t = transportRef.current;
-      if (!t?.respondPermission) throw new Error("ghostykit: el transporte no sabe contestar permisos (pasa `onPermission`)");
-      const r = await t.respondPermission(id, optionId);
-      // Contestado o vencido, la tarjeta ya no tiene nada que pedir (el stream también lo retira).
-      commit({ ...ref.current, permissions: ref.current.permissions.filter((p) => p.id !== id), effects: [] });
+      const handler: PermissionHandler | undefined = via ?? (t?.respondPermission ? (a, b) => t.respondPermission!(a, b) : undefined);
+      if (!handler) throw new Error("ghostykit: el transporte no sabe contestar permisos (pasa `onPermission`)");
+      const asked = ref.current.permissions.find((p) => p.id === id);
+      const r = await handler(id, optionId);
+      // Contestada o vencida, la tarjeta sale de las abiertas y queda anotada en la respuesta.
+      commit(resolvePermission(ref.current, id, optionId, r ? r.resolved !== false : true, r ? r.detail : undefined, asked));
       return r;
+    },
+    [commit],
+  );
+
+  const expirePermission = useCallback(
+    (id: string) => {
+      if (ref.current.permissions.some((p) => p.id === id)) commit(resolvePermission(ref.current, id, "", false));
     },
     [commit],
   );
@@ -215,7 +256,7 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
     [commit],
   );
 
-  return { state, send, stop, retry, abandonAndRetry, resume, setModel, respondPermission, appendAgentMessage };
+  return { state, send, stop, retry, abandonAndRetry, resume, setModel, respondPermission, expirePermission, appendAgentMessage };
 }
 
 /** Un transporte SSE estable por `base` (crearlo en cada render reabriría el stream). */

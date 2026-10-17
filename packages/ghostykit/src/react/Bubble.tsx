@@ -6,6 +6,7 @@ import { splitNarration } from "../core/narration";
 import { cleanReplyOption, extractReplyOptions, type ReplyOptions } from "../core/options";
 import { systemNoteOf } from "../core/text";
 import type { Delivery, Turn, Usage } from "../core/types";
+import { DecisionLines } from "./ConfirmCard";
 import { usePiloto } from "./context";
 import { Markdown } from "./Markdown";
 import { AgentSteps, Narration } from "./Steps";
@@ -242,6 +243,7 @@ export function AgentBubble({ turn, live, onRetry, onOption, showUsage = true, s
         visible && <AnswerText key={`r${narrated.steps.length}`} text={visible} live={live || !!turn.arrived} whole={!!turn.arrived} />
       )}
       {renderDeliveries ? renderDeliveries(turn, live) : turn.deliveries?.length ? <DeliveryChips deliveries={turn.deliveries} /> : null}
+      {turn.decisions?.length ? <DecisionLines decisions={turn.decisions} /> : null}
       {showUsage && turn.usage && <UsageStats {...turn.usage} />}
       {turn.text && !live && <TurnFooter text={turn.text} seconds={turn.seconds} onRetry={onRetry} showCopy={showCopy} />}
     </div>

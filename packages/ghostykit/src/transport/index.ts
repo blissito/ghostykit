@@ -2,40 +2,10 @@
 // de eventos con nombre, mandar, cancelar y (opcional) modelo y permisos. `createSseTransport` habla
 // el contrato de Ghosty Studio (`${base}/events|messages|cancel|model|permission`).
 import type { SendInput, SendResult } from "../core/types";
+import { PilotHttpError, type PilotListener, type PilotTransport } from "./types";
 
-/** Un evento con nombre y su `data` ya parseado (`null` si no traía o no era JSON). */
-export type PilotListener = (name: string, data: unknown) => void;
-
-export interface SubscribeOptions {
-  /** ¿Hay un turno en vuelo? Con turno vivo, un silencio largo = conexión muerta → se reabre. */
-  isBusy?: () => boolean;
-}
-
-export interface PilotTransport {
-  /** Abre el stream de eventos. Devuelve con qué cerrarlo. */
-  subscribe(listener: PilotListener, opts?: SubscribeOptions): () => void;
-  /** Encarga un turno (o lo mete al turno en vuelo). Rechaza con `PilotHttpError` si el servidor dice que no. */
-  send(input: SendInput): Promise<SendResult>;
-  /** Detiene el turno en curso. */
-  cancel(): Promise<void>;
-  /** Cambia el modelo de la sesión (el stream confirma con `models`). */
-  setModel?(value: string): Promise<void>;
-  /** Contesta un pedido de permiso. `resolved: false` = ya no estaba abierto (se agotó el plazo). */
-  respondPermission?(id: string, optionId: string): Promise<{ resolved: boolean }>;
-}
-
-/** El servidor rechazó el encargo (sin saldo, sin cuenta, agente de otro). */
-export class PilotHttpError extends Error {
-  status: number;
-  /** El servidor pide cuenta (`X-Needs-Login`). */
-  needsLogin: boolean;
-  constructor(message: string, status: number, needsLogin = false) {
-    super(message);
-    this.name = "PilotHttpError";
-    this.status = status;
-    this.needsLogin = needsLogin;
-  }
-}
+export * from "./types";
+export { createPostStreamTransport, readSse, type PostStreamTransportOptions, type SseMessage } from "./postStream";
 
 /** Los eventos con nombre del contrato. Un evento SSE sin `addEventListener` no se despacha nunca. */
 export const SSE_EVENTS = [
@@ -43,6 +13,8 @@ export const SSE_EVENTS = [
   "done", "error", "warning", "reemplazo", "permission", "permission-resolved", "closed",
   "page-plan", "section-building", "section-update", "section", "page-ready", "page-error",
   "page-planning", "page-drop", "review", "page-version", "page-edit",
+  // Los de un servidor de turnos durables (EasyBits): re-enganche, sin turno, cortado, sin lugar.
+  "snapshot", "idle", "interrupted", "capacity",
 ] as const;
 
 /** Los que cuentan como señal de vida de la conexión (los mismos que en `useAcpStream`). */
@@ -50,6 +22,7 @@ const LIFE_EVENTS = new Set([
   "started", "status", "chunk", "thought", "tool", "artifact", "usage", "done", "error", "warning",
   "reemplazo", "permission", "page-plan", "section-building", "section-update", "section",
   "page-ready", "page-error", "page-planning", "page-drop", "review", "page-version", "page-edit",
+  "snapshot", "idle", "interrupted", "capacity",
 ]);
 
 /**

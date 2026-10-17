@@ -65,6 +65,8 @@ export interface ComposerProps {
   onSubmit: (text: string, attachments: Attachment[]) => void;
   onStop?: () => void;
   busy?: boolean;
+  /** ¿Se puede mandar texto con el turno en vuelo? (el servidor lo mete al turno). Default sí. */
+  canSteer?: boolean;
   placeholder?: string;
   initialValue?: string;
   autoFocus?: boolean;
@@ -93,6 +95,7 @@ export function Composer({
   onSubmit,
   onStop,
   busy = false,
+  canSteer = true,
   placeholder,
   initialValue = "",
   autoFocus = true,
@@ -247,7 +250,7 @@ export function Composer({
     const body = value.trim();
     if (!body && files.length === 0 && references.length === 0) return;
     // Con turno en vuelo se manda TEXTO (corrección al turno); un steer no lleva archivos.
-    if (busy && files.length > 0) return;
+    if (busy && (files.length > 0 || !canSteer)) return;
     if (uploading) return;
     let atts: Attachment[] = [];
     if (files.length) setUploading(true);
