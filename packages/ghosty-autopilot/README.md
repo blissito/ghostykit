@@ -7,6 +7,10 @@ markup, same look ([side by side](https://raw.githubusercontent.com/blissito/gho
 have. It sees what the user has on screen, streams what the agent says and does, and **stops to ask
 before anything risky** (human in the loop).
 
+It speaks **[AG-UI](https://docs.ag-ui.com)**, the open agent ↔ app protocol, so it works with
+**LangGraph**, Mastra, CrewAI, Pydantic AI, Google ADK, or your own backend. No adapter of ours in
+between.
+
 > El piloto de tu app, no el copiloto: tú no manejas, vas de pasajero y le dices a dónde ir. Es el chat de Ghosty, probado en producción, como biblioteca. Español por default, inglés incluido.
 
 **[Open the playground →](https://blissito.github.io/ghosty-autopilot/)** (a fake backend, a real chat)
@@ -19,11 +23,13 @@ before anything risky** (human in the loop).
 - **Agent steps**: every tool call as a line ("Read 2 files", "Searched the web"). Steps fold into a card when the turn ends, and you can show your own labels and icons.
 - **The permission pass**: risky actions arrive as a card with a countdown, *Approve* and *Reject*. A stamp lands when you answer, and the decision stays recorded under the reply.
 - **Context and references**: what the user is looking at travels with every turn. Rows from your app can be "@-mentioned" into the message.
-- **Resilience**: reconnects after a dropped network or a deploy, re-attaches to a running turn, retries while the server drains, and offers *Resume* when a turn is cut short.
-- **The composer**: attachments (you provide `upload`), voice notes (you provide `transcribe`), stop, model picker and reply-option buttons.
-- **Solid core**: the whole chat state is a pure reducer, `reducePilotEvent(state, name, data)`, tested by replaying real SSE sessions.
+- **Resilience**: the thread lives on your server. A dropped connection or a reload asks for it again
+  and repaints from `MESSAGES_SNAPSHOT`, pending approvals included; a deploy (`503`) is retried with
+  the same run.
+- **The composer**: attachments (you provide `upload`), voice notes (you provide `transcribe`), stop and reply-option buttons.
+- **Solid core**: the whole chat state is a pure reducer over AG-UI events, `reduceAgUiEvent(state, event)`, tested by replaying streams recorded from a real LangGraph agent.
 
-> **En español:** Ghosty Autopilot le pone piloto a tu app con un solo componente: la persona dice qué quiere y el agente lo hace por ella. Tus usuarios ven la respuesta escribirse en vivo y cada paso del agente («Leí 2 archivos»), y aprueban o rechazan cualquier acción riesgosa con una tarjeta antes de que ocurra. El agente sabe qué pantalla y qué registro está viendo la persona. El chat se recupera solo de cortes de red y de deploys sin perder el turno, y trae adjuntos, notas de voz y botón para detener. Por dentro, todo el estado es una función pura probada con sesiones reales, así que se puede actualizar sin miedo.
+> **En español:** Ghosty Autopilot le pone piloto a tu app con un solo componente: la persona dice qué quiere y el agente lo hace por ella. Tus usuarios ven la respuesta escribirse en vivo y cada paso del agente («Leí 2 archivos»), y aprueban o rechazan cualquier acción riesgosa con una tarjeta antes de que ocurra. El agente sabe qué pantalla y qué registro está viendo la persona. Habla AG-UI, el protocolo abierto entre agentes y apps, así que funciona con LangGraph, Mastra, CrewAI o tu propio backend. El chat se recupera solo de cortes de red y de deploys, y trae adjuntos, notas de voz y botón para detener. Por dentro, todo el estado es una función pura probada con sesiones reales, así que se puede actualizar sin miedo.
 
 ## 30-second quickstart
 
@@ -32,74 +38,47 @@ npm i ghosty-autopilot motion streamdown
 ```
 
 ```tsx
-import { Piloto, useSseTransport } from "ghosty-autopilot";
+import { Piloto, createAgUiTransport } from "ghosty-autopilot";
 import "ghosty-autopilot/styles.css";
-import "ghosty-autopilot/fonts.css"; // optional: the house typefaces
+
+const transport = createAgUiTransport({ url: "/api/agent" }); // any AG-UI endpoint
 
 export function Pilot() {
-  const transport = useSseTransport("/api/pilot/conversations/123");
   return <Piloto transport={transport} />;
 }
 ```
 
 `<Piloto transport={…} />` works with nothing else. Give its container a height: Piloto fills it.
+The product is **Ghosty Autopilot**; the component is `<Piloto>`.
 
-> **Names.** The product is **Ghosty Autopilot**; the component is still `<Piloto>`, and the rest of the
-> API keeps its names (`usePilot`, `PilotTransport`, the `.piloto` class and the `--piloto-*` variables),
-> so nothing breaks when you upgrade.
+## Works with LangGraph (and any AG-UI agent)
 
-## Transports
+Serve your LangGraph graph with its official AG-UI adapter and point Piloto at it:
 
-A transport is how Piloto talks to your agent. It is a small interface: `subscribe`, `send`, `cancel`,
-plus optional `setModel`, `respondPermission` and `history`. Two are included.
+```ts
+// server: one POST endpoint (full file in examples/langgraph/src/server.ts)
+import { LangGraphAgent } from "@ag-ui/langgraph";
+import { EventEncoder } from "@ag-ui/encoder";
 
-### 1. Split stream: `createSseTransport(base)` (Ghosty's contract)
-
-The event stream stays open (`EventSource`) and messages go by POST.
-
-| | |
-|---|---|
-| `GET  {base}/events` | Named SSE events: `started`, `status`, `chunk`, `thought`, `tool`, `permission`, `permission-resolved`, `usage`, `models`, `title`, `done{reposo?,interrumpido?,ultimo?}`, `error`… |
-| `POST {base}/messages` | `{content, images, primerTurno, retomar?, context?}` → `{inyectado?, estado?, turnId?}` |
-| `POST {base}/cancel` · `/model` · `/permission` | stop, switch model, answer a card |
-
-Messages sent during a running turn are injected into it (steer). A silent connection during a turn is
-reopened, and the server says whether the turn continued, finished or was cut short.
-
-### 2. POST returns the stream: `createPostStreamTransport({ url })` (EasyBits' contract)
-
-The POST that starts a turn *is* the SSE. A GET re-attaches to a running turn.
-
-| | |
-|---|---|
-| `POST {url}` | `{text, context?, turnId, continueTurnId?}` → SSE `started`, `chunk`, `tool{title,status}`, `permission{…, expiresAt}`, `done{turnId,text}`, `error`, `capacity`, `interrupted{turnId,canContinue}`, `idle` |
-| `GET {url}?attach=1` | `started`, one `permission` per open card, `snapshot{turnId,text,tools}`, then live |
-| `GET {url}` | `{messages:[{role,text}]}`, loaded as the thread |
-
-A 503 (deploy draining) is retried with the same `turnId`. A 409 `turn_busy` re-attaches to the turn
-that is already running. Approvals usually go through your own route:
-
-```tsx
-<Piloto
-  transport={useMemo(() => createPostStreamTransport({ url: "/api/v2/admin/copilot/chat" }), [])}
-  context={{ page: "crons", job: selectedJob }}
-  onPermission={async (id, optionId) => {
-    const res = await fetch(`/api/v2/admin/agent-actions/${id}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ decision: optionId === "approve" ? "approve" : "reject" }),
-    });
-    if (res.status === 409 || res.status === 404) return { resolved: false }; // expired or already answered
-    if (!res.ok) throw new Error("approval failed");
-    return { resolved: true, detail: (await res.json()).status };
-  }}
-/>
+const agent = new LangGraphAgent({ graphId: "crons", deploymentUrl: "http://localhost:2024", emitInterruptOutcome: true });
+// POST /agent → agent.run(runAgentInput).subscribe(e => res.write(new EventEncoder().encode(e)))
 ```
 
-### 3. Your own
+```tsx
+<Piloto transport={createAgUiTransport({ url: "http://localhost:8000/agent" })} />
+```
 
-Implement `PilotTransport` and emit the same event names (see `ghosty-autopilot/core` types). If you only need
-the state, use the reducer directly: `ghosty-autopilot/core` has no React dependency.
+`interrupt()` in your graph becomes the approval card; *Approve*/*Reject* resume it
+(`Command(resume={approved})` on the graph side). A runnable example with a tool and an approval is in
+[`examples/langgraph`](examples/langgraph); the playground can point at it with
+`?backend=agui&url=http://localhost:8000/agent`.
+
+## The contract
+
+One `POST <url>` with an AG-UI `RunAgentInput`, answered by a stream of standard AG-UI events. That's
+all a backend serves. **[docs/protocol.md](docs/protocol.md)** is the exact spec: request, events,
+approvals (`RUN_FINISHED.outcome: interrupt` + `resume`), reopening a thread (`MESSAGES_SNAPSHOT`),
+stopping and errors.
 
 ## Make it yours
 
@@ -116,7 +95,8 @@ const ref = useRef<PilotoHandle>(null);
   welcome="How can I help with your crons?"
   suggestions={["Why did the monitor fail?"]}
   draft={{ text: "Why did the monitor fail?", key: row.id }} // prefilled + focused, not sent
-  context={() => ({ screen: "crons", selected })}            // sent with EVERY turn
+  threadId={conversationId}                                   // reopen a stored thread
+  context={() => ({ screen: "crons", selected })}            // AG-UI `context`, every run
   toolVerbs={{ run_cron: { one: "Ran a cron", many: "Ran %n crons", running: "Running the cron…" } }}
   upload={async (file) => ({ url: await myUpload(file) })}
   transcribe={async (audio) => myWhisper(audio)}
@@ -129,9 +109,9 @@ ref.current?.send("Why did this fail?");                     // ask on the user'
 ```
 
 Other options: `strings`, `toolIcons`, `formatUserText`, `markdown`, `features`
-(`attachments`, `retry`, `copy`, `usage`, `models`, `replyOptions`, `duration`), `references` /
+(`attachments`, `retry`, `copy`, `usage`, `replyOptions`, `duration`), `references` /
 `onReferencesChange`, `voiceNoteText`, `placeholder`, `avatar`, `initialTurns`, and the callbacks
-`onTurnStart`, `onTitle`, `onNeedsLogin`, `onDisconnected`, `onEvent`, `onSend`. To read the state
+`onTurnStart`, `onTitle`, `onEvent` (every raw AG-UI event: STATE_*, CUSTOM…), `onSend`. To read the state
 outside the chat, call `usePilot(transport)` yourself and pass the result as `pilot`. Every piece is
 exported (`AgentBubble`, `AgentSteps`, `Composer`, `ConfirmCard`, `Markdown`, …) if you want to build
 your own layout.
@@ -178,21 +158,6 @@ npm install
 npm test        # reducer, both transports, parsers, SSR
 npm run build   # dist/ (JS + .d.ts + styles.css)
 npm run demo    # http://localhost:5173
-```
-
-## Migrating from `ghostykit`
-
-`ghostykit` was this package's earlier name (0.1–0.3). Same code, same API: install
-`ghosty-autopilot` and change the import path.
-
-```diff
-- npm i ghostykit
-+ npm i ghosty-autopilot
-
-- import { Piloto } from "ghostykit";
-- import "ghostykit/styles.css";
-+ import { Piloto } from "ghosty-autopilot";
-+ import "ghosty-autopilot/styles.css";
 ```
 
 ## License

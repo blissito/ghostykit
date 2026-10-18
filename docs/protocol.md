@@ -42,7 +42,7 @@ Body: `RunAgentInput`.
 
 | Field | What Ghosty Autopilot sends | What the backend does |
 |---|---|---|
-| `threadId` | Stable per conversation (the app passes it, or the client makes one and keeps it) | Key under which the backend stores the thread. **The backend owns the history.** |
+| `threadId` | Stable per conversation: the app passes it, or the client makes a UUID v4 | Key under which the backend stores the thread. **The backend owns the history.** (Use UUIDs: LangGraph requires them.) |
 | `runId` | New for every request | Echo it in `RUN_STARTED`/`RUN_FINISHED`. Use it to make retries idempotent. |
 | `messages` | **Only what is new in this request**: the user's message, or nothing (see §5) | Append to the stored thread. Never trust the client for older history. |
 | `context` | What the user sees right now, one entry per key; `value` is a string (JSON when structured) | Give it to the agent for this run only. |
@@ -139,8 +139,10 @@ The approval card shows `message` as the title, the tool (`metadata.tool`, or th
   "resume": [ { "interruptId": "int_7c1", "status": "resolved", "payload": { "approved": true } } ]
   ```
 - **Reject** sends the same request with `"payload": { "approved": false }`.
-- If the card expires, the client sends nothing. A later resume for it gets `RUN_ERROR` with
-  `code: "interrupt_expired"`.
+- If the card **expires**, or the user **types a new message instead of answering**, the next request
+  carries `{"interruptId": "int_7c1", "status": "cancelled"}` for it (with the new message, if any).
+  `cancelled` means "no": the backend must not run the action. A `resolved` resume that arrives after
+  `expiresAt` gets `RUN_ERROR` with `code: "interrupt_expired"`.
 
 The answer comes back as a normal stream: the action's `TOOL_CALL_RESULT`, the agent's text and
 `RUN_FINISHED` (or another interrupt).
