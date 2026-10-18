@@ -47,7 +47,8 @@ Body: `RunAgentInput`.
 | `messages` | **Only what is new in this request**: the user's message, or nothing (see §5) | Append to the stored thread. Never trust the client for older history. |
 | `context` | What the user sees right now, one entry per key; `value` is a string (JSON when structured) | Give it to the agent for this run only. |
 | `resume` | Answers to pending approvals (see §4) | Continue the paused run. |
-| `tools`, `state`, `forwardedProps` | Empty | Ignore unless your agent uses them. |
+| `forwardedProps` | Empty, except `{"cancel": "<runId>"}` to stop a run (§6) | Stop that run. |
+| `tools`, `state` | Empty | Ignore unless your agent uses them. |
 
 Attachments go in the user message as AG-UI content parts:
 `{"type":"text","text":"…"}`, `{"type":"image","source":{"type":"url","value":"https://…"}}`,
@@ -183,8 +184,19 @@ There is no event replay and no `Last-Event-ID`: the snapshot is the source of t
 
 ## 6. Stopping and errors
 
-- **Stop:** the client aborts the request. When the connection closes, the backend **stops the run**
-  and keeps what was already said in the thread. There is no `/cancel` endpoint.
+- **A closed connection never stops anything.** The user may reload, lose the network or the server
+  may be deploying: the run keeps going on the server, and the next request for the thread (§5)
+  picks it up live. A backend must not cancel a run because its client went away.
+- **Stop** is an explicit request to the same endpoint, with no new message and the run to stop in
+  `forwardedProps.cancel`:
+  ```json
+  { "threadId": "th_2f1c", "runId": "run_8b02", "messages": [], "forwardedProps": { "cancel": "run_8a77" } }
+  ```
+  The backend stops that run (keeping what was already said) and answers
+  `RUN_STARTED` → `RUN_FINISHED {outcome: {type: "cancelled"}}`. If anyone is still reading the
+  stopped run, its stream also ends with `RUN_FINISHED {outcome: {type: "cancelled"}}`. Stopping a
+  run that already ended is harmless (same answer). `cancel` is the `runId` the client sent when it
+  started the run.
 - **HTTP errors** (before the stream starts; body `{"error": "<code>", "message": "<for people>"}`):
 
 | Status | When | Client does |
@@ -215,7 +227,7 @@ Only one, and it is optional. The app reads it through `onEvent`:
    `approved: true`, once, before `expiresAt`.
 4. An empty `messages` with no `resume` answers `MESSAGES_SNAPSHOT` plus the live run, the pending
    interrupt, or success.
-5. Closing the connection stops the run. `409`/`429`/`503` as in §6.
+5. A closed connection never stops a run; `forwardedProps.cancel` does. `409`/`429`/`503` as in §6.
 
 Reference: an agent written with LangGraph and served through its official AG-UI adapter
 (`@ag-ui/langgraph`) is in [`examples/langgraph`](../examples/langgraph).
