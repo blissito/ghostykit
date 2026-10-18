@@ -1,6 +1,6 @@
 # Ghosty Autopilot · `ghosty-autopilot`
 
-**An autopilot for your React app, not a copilot.** You don't drive: you say where you're going and
+**An autopilot for your React app, not a copilot or kit.** You don't drive: you say where you're going and
 the agent flies the app for you, stopping only to ask before anything risky. Ghosty Autopilot is the agent chat from
 [Ghosty Studio](https://www.ghosty.studio) (`/c`), packaged as a library: same components, same
 markup, same look ([side by side](https://raw.githubusercontent.com/blissito/ghosty-autopilot/main/docs/screenshots/parity/desktop-done-gs-vs-ghosty-autopilot.png)). You drop it into an app you already
