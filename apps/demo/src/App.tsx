@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { Piloto, type PilotoHandle, type TurnDoneInfo } from "ghosty-autopilot";
 import { createMockTransport } from "./mockTransport";
+import { createAgUiTransport } from "ghosty-autopilot";
 
 const CRONS = [
   { name: "purge-files", schedule: "cada 7 días", last: "hace 2 h", status: "ok" },
@@ -13,7 +14,13 @@ const CRONS = [
 type Skin = "ghosty" | "easybits" | "neutral";
 
 export function App() {
-  const transport = useMemo(() => createMockTransport(), []);
+  // `?backend=agui&url=http://localhost:8000/agent`: un agente AG-UI de verdad (p. ej. examples/langgraph).
+  // Sin eso, el agente de mentira de `mockTransport.ts`.
+  const transport = useMemo(() => {
+    const q = new URLSearchParams(typeof location === "undefined" ? "" : location.search);
+    const url = q.get("url");
+    return q.get("backend") === "agui" && url ? createAgUiTransport({ url, credentials: "omit" }) : createMockTransport();
+  }, []);
   const pilot = useRef<PilotoHandle>(null);
   // `?skin=easybits&dark=1&lang=en`: para compartir una combinación (y para las capturas).
   const q = new URLSearchParams(typeof location === "undefined" ? "" : location.search);
@@ -22,9 +29,10 @@ export function App() {
   const [locale, setLocale] = useState<"es" | "en">(q.get("lang") === "en" ? "en" : "es");
   const [selected, setSelected] = useState<string | null>(null);
   const [log, setLog] = useState<string[]>([]);
+  const [thread, setThread] = useState<string | null>(null);
 
   const onTurnDone = (info: TurnDoneInfo) =>
-    setLog((l) => [`onTurnDone · ${info.seconds ?? "?"} s · ${info.text.length} letras${info.interrupted ? " · interrumpido" : ""}`, ...l].slice(0, 4));
+    setLog((l) => [`onTurnDone · ${info.seconds ?? "?"} s · ${info.text.length} letras${info.interrupted ? " · pide aprobación" : ""}`, ...l].slice(0, 4));
 
   // `?parity=1`: sólo el chat, con lo mismo que /c de Ghosty, para compararlos lado a lado.
   if (q.get("parity") === "1") {
@@ -40,7 +48,6 @@ export function App() {
           suggestions={["Hazme una cotización en PDF", "Arma una landing para mi negocio", "Escribe un mensaje de seguimiento", "Redacta un documento"]}
           upload={async (f) => ({ url: URL.createObjectURL(f) })}
           transcribe={async () => ""}
-          features={{ models: false }}
           // Lo propio de cada app va por slots: aquí, «Mis archivos» como en Ghosty.
           slots={{
             composerExtras: (
@@ -120,6 +127,11 @@ export function App() {
             </li>
           ))}
         </ul>
+        {thread && (
+          <p className="thread">
+            threadId <code>{thread}</code>
+          </p>
+        )}
         <h2>Callbacks</h2>
         <ul className="log">{log.length ? log.map((l, i) => <li key={i}>{l}</li>) : <li>— todavía nada —</li>}</ul>
       </aside>
@@ -144,6 +156,8 @@ export function App() {
             run_cron: { one: "Corrí un cron", many: "Corrí %n crons", running: "Corriendo el cron…" },
           }}
           onTurnDone={onTurnDone}
+          threadId={new URLSearchParams(typeof location === "undefined" ? "" : location.search).get("thread") ?? undefined}
+          onSend={(input) => setThread(input.threadId)}
           transcribe={async () => "¿por qué falló el monitor?"}
         />
       </main>

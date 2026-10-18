@@ -1,0 +1,23 @@
+{
+  "name": "ghosty-autopilot-example-langgraph",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "langgraphjs dev --port 2024 --no-browser",
+    "agui": "tsx src/server.ts"
+  },
+  "dependencies": {
+    "@ag-ui/client": "^1.0.3",
+    "@ag-ui/core": "^1.0.3",
+    "@ag-ui/encoder": "^1.0.3",
+    "@ag-ui/langgraph": "^0.0.45",
+    "@langchain/core": "^1.2.18",
+    "@langchain/langgraph": "^1.5.1",
+    "@langchain/langgraph-sdk": "^1.12.5",
+    "tsx": "^4.23.15",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@langchain/langgraph-cli": "^1.5.4"
+  }
+}

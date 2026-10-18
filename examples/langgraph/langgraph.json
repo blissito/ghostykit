@@ -1,0 +1,5 @@
+{
+  "node_version": "22",
+  "graphs": { "crons": "./src/agent.ts:graph" },
+  "env": {}
+}
