@@ -1,9 +1,38 @@
 // El playground: un panel de crons de mentira a la izquierda (lo que la app ya tiene) y Piloto a la
 // derecha. El panel le pasa `context` (qué pantalla y qué fila ves) y referencias con «@».
 import { useMemo, useRef, useState } from "react";
-import { Piloto, type PilotoHandle, type TurnDoneInfo } from "ghostykit";
-import { createMockTransport } from "./mockTransport";
+import { Piloto, definePlugin, type PilotoHandle, type TurnDoneInfo } from "ghostykit";
+import { livePage, modelPicker } from "ghostykit/plugins";
+import { createMockTransport, setMockModel } from "./mockTransport";
 import { createAgUiTransport } from "ghostykit";
+
+// Todo lo propio de esta app va en plugins, con nombre. Se crean UNA vez, fuera del render.
+const crons = definePlugin({
+  name: "crons",
+  tools: {
+    verbs: {
+      list_crons: { one: "Revisé los crons", many: "Revisé los crons", running: "Revisando los crons…" },
+      get_cron_runs: { one: "Leí el historial", many: "Leí %n historiales", running: "Leyendo el historial…" },
+      run_cron: { one: "Corrí un cron", many: "Corrí %n crons", running: "Corriendo el cron…" },
+    },
+  },
+  composer: { attachments: { transcribe: async () => "¿por qué falló el monitor?" } },
+});
+const PLUGINS = [crons, modelPicker({ onChange: (value) => setMockModel(value) }), livePage()];
+
+// `?parity=1`: lo mismo que /c de Ghosty, «Mis archivos» incluido.
+const misArchivos = definePlugin({
+  name: "misArchivos",
+  composer: {
+    attachments: { upload: async (f) => ({ url: URL.createObjectURL(f) }), transcribe: async () => "" },
+    actions: () => (
+      <button type="button" aria-label="De mis archivos" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-background-secondary hover:text-text-primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2" /></svg>
+      </button>
+    ),
+  },
+});
+const PARITY_PLUGINS = [misArchivos];
 
 const CRONS = [
   { name: "purge-files", schedule: "cada 7 días", last: "hace 2 h", status: "ok" },
@@ -46,16 +75,7 @@ export function App() {
           avatar={<img src="https://formmy.app/logo.png" alt="" width={72} height={72} className="parity-ghost" />}
           welcome="¿Qué estás pensando?"
           suggestions={["Hazme una cotización en PDF", "Arma una landing para mi negocio", "Escribe un mensaje de seguimiento", "Redacta un documento"]}
-          upload={async (f) => ({ url: URL.createObjectURL(f) })}
-          transcribe={async () => ""}
-          // Lo propio de cada app va por slots: aquí, «Mis archivos» como en Ghosty.
-          slots={{
-            composerExtras: (
-              <button type="button" aria-label="De mis archivos" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-background-secondary hover:text-text-primary">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2" /></svg>
-              </button>
-            ),
-          }}
+          plugins={PARITY_PLUGINS}
         />
       </div>
     );
@@ -150,15 +170,10 @@ export function App() {
               : ["¿Por qué falló el monitor?", "Resume las corridas de hoy", "Explícame esto: "]
           }
           context={() => ({ screen: "Panel de crons", selected })}
-          toolVerbs={{
-            list_crons: { one: "Revisé los crons", many: "Revisé los crons", running: "Revisando los crons…" },
-            get_cron_runs: { one: "Leí el historial", many: "Leí %n historiales", running: "Leyendo el historial…" },
-            run_cron: { one: "Corrí un cron", many: "Corrí %n crons", running: "Corriendo el cron…" },
-          }}
+          plugins={PLUGINS}
           onTurnDone={onTurnDone}
           threadId={new URLSearchParams(typeof location === "undefined" ? "" : location.search).get("thread") ?? undefined}
           onSend={(input) => setThread(input.threadId)}
-          transcribe={async () => "¿por qué falló el monitor?"}
         />
       </main>
     </div>

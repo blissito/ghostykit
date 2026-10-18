@@ -97,34 +97,95 @@ const ref = useRef<PilotoHandle>(null);
   draft={{ text: "Why did the monitor fail?", key: row.id }} // prefilled + focused, not sent
   threadId={conversationId}                                   // reopen a stored thread
   context={() => ({ screen: "crons", selected })}            // AG-UI `context`, every run
-  toolVerbs={{ run_cron: { one: "Ran a cron", many: "Ran %n crons", running: "Running the cron…" } }}
-  upload={async (file) => ({ url: await myUpload(file) })}
-  transcribe={async (audio) => myWhisper(audio)}
   onTurnDone={({ text }) => refreshMyData()}
-  slots={{ renderDeliveries: (turn) => <MyFiles turn={turn} />, composerExtras: <MyButton /> }}
+  plugins={PLUGINS}                                           // everything else: see Customize
 />;
 
 ref.current?.addReference({ id: "12", label: "#12 Rosa" }); // "@" a row into the message
 ref.current?.send("Why did this fail?");                     // ask on the user's behalf
 ```
 
-Other options: `strings`, `toolIcons`, `formatUserText`, `markdown`, `features`
-(`attachments`, `retry`, `copy`, `usage`, `replyOptions`, `duration`, `steer`), `references` /
-`onReferencesChange`, `voiceNoteText`, `placeholder`, `avatar`, `initialTurns`, `loadOlder` (earlier
-pages of a long thread), `forwardedProps` (extra keys for every run, e.g. `{permissions: "ask"}`), the
-slots `sidePanel` and `aboveComposer` (both may take the `pilot`), and the callbacks `onTurnStart`,
-`onTitle`, `onState`, `onEvent` (every raw AG-UI event), `onSend`. The agent's shared state
-(`STATE_SNAPSHOT` + `STATE_DELTA`) is `pilot.state.agentState`, and each turn's `CUSTOM` events are
-`turn.custom` (what `renderDeliveries` draws).
+Other props: `features` (`attachments`, `retry`, `copy`, `usage`, `replyOptions`, `duration`,
+`steer`), `references` / `onReferencesChange`, `placeholder`, `avatar`, `initialTurns`, `loadOlder`
+(earlier pages of a long thread), `forwardedProps` (extra keys for every run, e.g.
+`{permissions: "ask"}`), and the callbacks `onTurnStart`, `onTitle`, `onState`, `onEvent` (every raw
+AG-UI event), `onSend`. The agent's shared state (`STATE_SNAPSHOT` + `STATE_DELTA`) is
+`pilot.state.agentState`, and each turn's `CUSTOM` events are `turn.custom`.
 
 Subagents (`state.subagents.tasks`) are `pilot.subagents`; `pilot.stopSubagent(id)` stops one, and
-`<Subagents pilot={pilot} />` is a ready-made bar ("2 agents working", one row each, *Stop*):
-`slots={{ aboveComposer: (pilot) => <Subagents pilot={pilot} /> }}`. A message the server can't take
-while a run is live (`409 run_active`) waits in `pilot.state.queued` and is sent when that run ends.
-`pilot.refresh()` asks for the thread again (when your own event bus says something changed). To read the state outside the chat, call `usePilot(transport)` yourself
-and pass the result as `pilot`. Every piece is
-exported (`AgentBubble`, `AgentSteps`, `Composer`, `ConfirmCard`, `Markdown`, …) if you want to build
-your own layout.
+`<Subagents pilot={pilot} />` is a ready-made bar ("2 agents working", one row each, *Stop*). A
+message the server can't take while a run is live (`409 run_active`) waits in `pilot.state.queued`
+and is sent when that run ends. `pilot.refresh()` asks for the thread again (when your own event bus
+says something changed). To read the state outside the chat, call `usePilot(transport)` yourself and
+pass the result as `pilot`. Every piece is exported (`AgentBubble`, `AgentSteps`, `Composer`,
+`ConfirmCard`, `Markdown`, …) if you want to build your own layout.
+
+## Customize
+
+There is **one** way to customize `<Piloto>`: **plugins**. A plugin is an object with a `name` and
+named extension points. Everything a plugin draws is a React **component**: it is mounted as
+`<View ctx={…} />`, so it can use hooks. Branding is the skin plus `--piloto-*` tokens.
+
+```tsx
+import { Piloto, definePlugin } from "ghostykit";
+import { livePage, modelPicker, pilotDevtools } from "ghostykit/plugins";
+
+const crm = definePlugin({
+  name: "crm",
+  requires: { events: ["crm.card"] },                       // what it handles, visible at a glance
+  tools: { verbs: { find_lead: { one: "Found the lead", many: "Found %n leads", running: "Looking…" } } },
+  message: { custom: { "crm.card": ({ entry, ctx }) => <LeadCard lead={entry.value} onOpen={() => ctx.send("Open it")} /> } },
+  composer: { actions: ({ ctx }) => <PointButton onPick={(row) => ctx.addReference(row)} /> },
+});
+
+// Create them ONCE (module scope or useMemo): some plugins keep state.
+const PLUGINS = [crm, modelPicker({ onChange: (model) => api.setModel(model) }), livePage(), pilotDevtools()];
+
+<Piloto transport={transport} skin="ghosty" plugins={PLUGINS} />;
+```
+
+| Point | What it does | Example |
+|---|---|---|
+| `name` | Unique. Marks everything it draws with `data-plugin="<name>"`. | `"crm"` |
+| `requires` | `{events, state}` it handles. Derived from `events`/`state`/`message.custom` if missing; in development a mismatch is a warning. | `{ events: ["ghosty.page"] }` |
+| `strings` | Texts over the locale's. | `{ stop: "Para" }` |
+| `markdown` | `transform` (chained) and `onLinkClick` (first that handles it). | `{ transform: (md) => md.replace(/#(\d+)/g, "[#$1](#folio-$1)") }` |
+| `vars`, `className` | Branding on the root: `--piloto-*` tokens and classes. | `{ "--piloto-radius-bubble": "6px" }` |
+| `tools.verbs` | How each tool is named in the steps. | `{ run_cron: { one, many, running } }` |
+| `tools.icons` | Icon by tool name or `kind`. | `{ run_cron: Clock }` |
+| `tools.render` | A tool's own view, under the steps, by tool name or `kind`. | `{ create_image: ImagePreview }` |
+| `events` | Handlers by AG-UI type, by `CUSTOM` name, or `*`. | `{ "ghosty.ui": (e, ctx) => board.open(e.value) }` |
+| `state` | Called when that key of `agentState` changes. | `{ model: (v, ctx) => … }` |
+| `message.custom` | Draws a `turn.custom` entry by its name (deliveries, CRM cards). | `{ "ghosty.delivery": DeliveryCard }` |
+| `message.user` / `message.assistant` | Extras under each user message / answer. | `({ turn, live }) => …` |
+| `message.formatUserText` | How the user's text is shown (chained). | strip app plumbing |
+| `composer.actions` | Buttons in the composer bar. | model picker, "Point" |
+| `composer.above` | Above the message box. | `<Subagents pilot={ctx.pilot} />` |
+| `composer.attachments` | `upload`, `transcribe`, `voiceNoteText`. | `{ upload: async (f) => ({ url }) }` |
+| `header` | Top right, over the thread. | share button |
+| `sidePanel` | Next to the chat. | live page, subagents |
+| `aboveThread` | Above the messages. | a banner |
+| `empty` | The empty thread (instead of the greeting). | onboarding |
+| `waiting` | While the agent hasn't answered (instead of the waiting phrase). Gets `step`, `since`. | "Creating your image…" |
+
+Every view gets `ctx`: `{pilot, agentState, strings, send, addReference, setDraft, plugins}`.
+
+**Order and precedence**, in the order of the `plugins` list:
+
+- **Maps** (`strings`, `tools.verbs`, `tools.icons`, `vars`) are merged, and later plugins win. `markdown` and `formatUserText` are chained.
+- **`events` and `state`** call every handler, in order.
+- **Keyed or single views** (`tools.render`, `message.custom`, `empty`, `waiting`, `composer.attachments`): the first plugin that declares one wins. A clash is a development warning.
+- **Lists** (`header`, `sidePanel`, `aboveThread`, `composer.actions`/`above`, `message.user`/`assistant`) are all drawn, in order.
+
+In development, ghostykit also warns once about a `CUSTOM` event that nothing handles.
+
+**Ready-made plugins** (`ghostykit/plugins`), usable as they are and as templates:
+
+| Plugin | What it does |
+|---|---|
+| `modelPicker({ onChange, stateKey? })` | The model picker in the composer bar, from `agentState.model = {current, options}`. Switching is your API (`onChange`). |
+| `livePage({ width? })` | A side panel that follows `CUSTOM ghosty.page` (plan, sections, ready, error) with the link at the end. |
+| `pilotDevtools({ events? })` | Prints the mounted plugins, their points and what they handle; with `events: true`, every event and who handles it. |
 
 ### Skins and theming
 

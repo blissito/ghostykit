@@ -322,7 +322,7 @@ describe("Piloto 0.5.0", () => {
   it("muestra «Cargar mensajes anteriores» y el sidePanel con el estado", () => {
     const state: PilotState = { ...createPilotState([{ role: "user", text: "hola" }]), history: { hasMoreBefore: true, before: "c" }, agentState: { n: 3 } };
     const pilot = { state, threadId: "t", canSteer: false, loadingOlder: false } as unknown as Pilot;
-    const html = renderToString(<Piloto transport={null} pilot={pilot} slots={{ sidePanel: (st) => <aside>{`subagentes ${String(st.n)}`}</aside> }} />);
+    const html = renderToString(<Piloto transport={null} pilot={pilot} plugins={[{ name: "panel", sidePanel: ({ ctx }) => <aside>{`subagentes ${String(ctx.agentState.n)}`}</aside> }]} />);
     expect(html).toContain("Cargar mensajes anteriores");
     expect(html).toContain("subagentes 3");
   });

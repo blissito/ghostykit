@@ -8,6 +8,7 @@ await build({
     "transport/index": "src/transport/index.ts",
     "react/index": "src/react/index.ts",
     "pointer/index": "src/pointer/index.ts",
+    "plugins/index": "src/plugins/index.tsx",
   },
   outdir: "dist",
   bundle: true,

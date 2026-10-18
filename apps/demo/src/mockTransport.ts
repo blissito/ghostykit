@@ -24,6 +24,16 @@ const CRONS_TABLE = `| Cron | Última corrida | Estado |
 /** Lo que el agente de mentira tiene pendiente por hilo (la aprobación abierta). */
 const paused = new Map<string, { interruptId: string; toolCallId: string; screen?: string }>();
 
+const MODELS = [
+  { value: "demo-rapido", name: "Rápido" },
+  { value: "demo-listo", name: "Listo" },
+];
+let model = MODELS[0].value;
+/** Cambiar de modelo es API de la app, no un run (el plugin `modelPicker` la llama). */
+export function setMockModel(value: string) {
+  model = value;
+}
+
 export function createMockTransport(): PilotTransport {
   return {
     async run(input: RunAgentInput, emit: (e: BaseEvent) => void, signal?: AbortSignal) {
@@ -49,6 +59,8 @@ export function createMockTransport(): PilotTransport {
       };
 
       e({ type: "RUN_STARTED", threadId, runId });
+      // El estado del agente: el modelo y sus opciones (lo pinta el plugin `modelPicker`).
+      e({ type: "STATE_SNAPSHOT", snapshot: { model: { current: model, options: MODELS } } });
       await sleep(400, signal);
 
       // Contestaron la aprobación.
@@ -73,6 +85,28 @@ export function createMockTransport(): PilotTransport {
       if (!text) {
         // Abrir el hilo: aquí no se guarda nada, así que no hay historia que mandar.
         e({ type: "MESSAGES_SNAPSHOT", messages: [] });
+        e({ type: "RUN_FINISHED", threadId, runId, outcome: { type: "success" } });
+        return;
+      }
+
+      if (/landing|página|pagina|page/i.test(text)) {
+        // Una página que se arma en vivo: la escucha el plugin `livePage` (CUSTOM ghosty.page).
+        const page = (v: Record<string, unknown>) => e({ type: "CUSTOM", name: "ghosty.page", value: v });
+        const pageId = id("page");
+        const sections = [
+          { id: "hero", title: "Portada" },
+          { id: "menu", title: "Menú" },
+          { id: "contacto", title: "Contacto" },
+        ];
+        await say("Armo tu landing.");
+        page({ event: "page-plan", pageId, title: "Café Brasa Nocturna", sections });
+        for (const s of sections) {
+          page({ event: "section-building", pageId, id: s.id });
+          await sleep(900, signal);
+          page({ event: "section", pageId, id: s.id, ok: true, html: `<section>${s.title}</section>` });
+        }
+        page({ event: "page-ready", pageId, n: 1, url: "https://example.com/cafe", title: "Café Brasa Nocturna", seconds: 3 });
+        await say("Lista: tres secciones (portada, menú y contacto).");
         e({ type: "RUN_FINISHED", threadId, runId, outcome: { type: "success" } });
         return;
       }

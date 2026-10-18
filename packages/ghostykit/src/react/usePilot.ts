@@ -104,6 +104,8 @@ export interface Pilot {
    * por fuera que algo cambió (p. ej. el bus `/me/events` avisa que un subagente terminó).
    */
   refresh: () => Promise<void>;
+  /** Escucha cada evento AG-UI de este piloto (como `onEvent`, pero desde afuera). Regresa cómo dejar de escuchar. */
+  subscribe: (listener: (event: BaseEvent) => void) => () => void;
   /** Continúa el run que el servidor cortó (`state.cutRun`): `forwardedProps.continueRun`. */
   continueRun: () => Promise<void>;
 }
@@ -168,6 +170,12 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
   /** Cuántas veces se rechazó cada texto en espera (por el id del mensaje con que salió). */
   const queuedTries = useRef(new Map<string, number>());
   const flushRef = useRef<() => void>(() => {});
+  /** Quien escucha cada evento AG-UI (los plugins de <Piloto>, devtools). */
+  const listeners = useRef(new Set<(e: BaseEvent) => void>());
+  const subscribe = useCallback((fn: (e: BaseEvent) => void) => {
+    listeners.current.add(fn);
+    return () => void listeners.current.delete(fn);
+  }, []);
 
   /** Lo que lleva todo run: hilo, run nuevo y el contexto de la pantalla en este momento. */
   const baseInput = (): RunAgentInput => {
@@ -213,6 +221,7 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
           (e) => {
             if (c.signal.aborted) return;
             optsRef.current.onEvent?.(e);
+            for (const fn of listeners.current) fn(e);
             if (e.type === "RUN_FINISHED" || e.type === "RUN_ERROR") {
               ended = true;
               liveRun.current = null;
@@ -456,5 +465,5 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
   const canSteer = Boolean(transport) && (opts.steer ?? ((state.agentState.caps as { steer?: unknown } | undefined)?.steer === true));
   const subagents = useMemo(() => subagentsOf(state.agentState), [state.agentState]);
 
-  return { state, threadId, send, stop, retry, respondPermission, recordDecision, expirePermission, canSteer, loadOlder, loadingOlder, subagents, stopSubagent, refresh, continueRun };
+  return { state, threadId, send, stop, retry, respondPermission, recordDecision, expirePermission, canSteer, loadOlder, loadingOlder, subagents, stopSubagent, refresh, continueRun, subscribe };
 }

@@ -96,7 +96,7 @@ How each one shows up in the chat:
 | `REASONING_MESSAGE_*` | Optional: the collapsible "Thinking…" block. |
 | `STEP_STARTED` / `STEP_FINISHED` | Optional. While nothing else is on screen, a step whose `stepName` the app has a label for (`strings.steps`, built in: `waking`, `session`, `compacting`) replaces the waiting phrase. Other names are not drawn, so framework node names never leak into the chat. |
 | `STATE_SNAPSHOT` / `STATE_DELTA` | Optional. The agent's shared state, given to the app as `pilot.state.agentState` (`STATE_DELTA` is an RFC 6902 JSON Patch over the last snapshot; a patch that doesn't apply is ignored until the next snapshot). Keys with meaning for the client: `caps.steer: true` turns on steer (§6), and `subagents.tasks` (below). |
-| `CUSTOM` | Kept in the turn as `turn.custom[]` (`{name, value, timestamp}`) for the app to draw (`renderDeliveries`), except the protocol ones in §7. |
+| `CUSTOM` | Kept in the turn as `turn.custom[]` (`{name, value, timestamp}`) for the app to draw (a plugin's `message.custom`), except the protocol ones in §7. |
 | `RUN_FINISHED` `usage` | Optional: tokens under the answer (`TokenUsage[]`: `[{model, inputTokens, outputTokens}]`). The cost, in USD, goes in `metadata.costUsd`. |
 | `RUN_FINISHED` `metadata.truncated` | Optional: `true` or `{reason}` when the backend cut the answer short (a length cap, a guard). A note under the answer says it is incomplete (`reason` if given). |
 | `RUN_ERROR` `{message, code?}` | The run ends here, with the message shown in red. Do **not** send `RUN_FINISHED` after it. |

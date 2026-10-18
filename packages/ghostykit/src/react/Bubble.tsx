@@ -1,6 +1,6 @@
 // Las burbujas del hilo. PORTADAS de Ghosty Studio (`Bubble` de `ChatView.tsx`, `TurnFooter.tsx`,
 // `OpcionesDeRespuesta.tsx`, `MessageUsageStats.tsx`) con el MISMO markup y clases. Lo propio de cada
-// app bajo la respuesta va por el slot `renderDeliveries`.
+// app bajo la respuesta llega por `renderDeliveries` (en <Piloto>, de los plugins).
 import { ArrowUpRight, Check, Coins, Copy, Gauge, RotateCcw } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { splitNarration } from "../core/narration";
@@ -200,9 +200,11 @@ export interface AgentBubbleProps {
   showDuration?: boolean;
   /** Lo que la app quiera pintar bajo la respuesta (archivos, tarjetas propias). */
   renderDeliveries?: (turn: Turn, live: boolean) => ReactNode;
+  /** Vistas propias de las herramientas, justo bajo los pasos. */
+  renderTools?: (turn: Turn, live: boolean) => ReactNode;
 }
 
-export function AgentBubble({ turn, live, onRetry, onOption, showUsage = true, showCopy = true, showDuration = true, renderDeliveries }: AgentBubbleProps) {
+export function AgentBubble({ turn, live, onRetry, onOption, showUsage = true, showCopy = true, showDuration = true, renderDeliveries, renderTools }: AgentBubbleProps) {
   const { strings: t } = usePiloto();
   const narrated = splitNarration(turn.text ?? "", turn.cuts);
   const visible = narrated.rest;
@@ -217,6 +219,7 @@ export function AgentBubble({ turn, live, onRetry, onOption, showUsage = true, s
         </details>
       )}
       {turn.tools && turn.tools.length > 0 && <AgentSteps tools={turn.tools} live={live} />}
+      {turn.tools && turn.tools.length > 0 && renderTools?.(turn, live)}
       {narrated.steps.length > 0 && <Narration steps={narrated.steps} />}
       {options ? (
         <>

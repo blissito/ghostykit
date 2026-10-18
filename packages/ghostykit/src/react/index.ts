@@ -1,5 +1,16 @@
 // ghostykit (y ghostykit/react) — el chat de Piloto para React, sobre AG-UI.
-export { Piloto, Piloto as default, type PilotoFeatures, type PilotoHandle, type PilotoProps, type PilotoSlots } from "./Piloto";
+export { Piloto, Piloto as default, type PilotoFeatures, type PilotoHandle, type PilotoProps } from "./Piloto";
+export {
+  definePlugin,
+  pluginPoints,
+  pluginRequires,
+  resolvePlugins,
+  type PilotoPlugin,
+  type PluginCtx,
+  type PluginEvent,
+  type PluginView,
+  type ResolvedPlugins,
+} from "./plugins";
 export { toAgUiContext, usePilot, type Pilot, type SendOptions, type TurnDoneInfo, type UsePilotOptions } from "./usePilot";
 export { AgentBubble, CopyUserMessage, ReplyOptionButtons, TurnFooter, UsageStats, UserBubble, type AgentBubbleProps } from "./Bubble";
 export { AgentSteps, ArcadeIcon, ClawIcon, DEFAULT_TOOL_ICONS, Narration, RobotArmIcon, ToolRow } from "./Steps";

@@ -390,7 +390,7 @@ describe("Piloto: barra de subagentes y mensajes en espera", () => {
     const root = createRoot(el);
     await act(async () =>
       root.render(
-        <Piloto transport={transport} threadId="33333333-3333-4333-8333-333333333333" slots={{ aboveComposer: (p) => <Subagents pilot={p} defaultOpen /> }} />,
+        <Piloto transport={transport} threadId="33333333-3333-4333-8333-333333333333" plugins={[{ name: "subagentes", composer: { above: ({ ctx }) => <Subagents pilot={ctx.pilot} defaultOpen /> } }]} />,
       ),
     );
     expect(el.textContent).toContain("1 agente trabajando");
