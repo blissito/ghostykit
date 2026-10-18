@@ -5,7 +5,13 @@
  */
 import { ArrowUp, Check, ChevronDown, Cpu, FileText, Image as ImageIcon, Loader2, Mic, Paperclip, Square, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import type { Attachment, ModelOption, Reference } from "../core/types";
+import type { Attachment, Reference } from "../core/types";
+
+/** Un modelo que la app ofrece elegir (AG-UI no lo define: la app lo manda en `forwardedProps`). */
+export interface ModelOption {
+  value: string;
+  name: string;
+}
 import { ReferenceChips } from "./Chips";
 import { usePiloto } from "./context";
 
@@ -250,7 +256,7 @@ export function Composer({
   const submit = async () => {
     const body = value.trim();
     if (!body && files.length === 0 && references.length === 0) return;
-    // Con turno en vuelo se manda TEXTO (corrección al turno); un steer no lleva archivos.
+    // Con un run en vuelo no se manda nada (AG-UI no mete mensajes a un run vivo): primero detener.
     if (busy && (files.length > 0 || !canSteer)) return;
     if (uploading) return;
     let atts: Attachment[] = [];
@@ -262,7 +268,7 @@ export function Composer({
           if (mime.startsWith("image/") || isText(mime)) return readInline(a.file);
           // Binario: se sube y viaja la URL (y su id); sin bytes en el turno.
           const up = await upload!(a.file);
-          return { name: a.file.name, mimeType: mime, data: "", uri: up.url, ...(up.id ? { fileId: up.id } : {}) };
+          return { name: a.file.name, mimeType: mime, url: up.url };
         }),
       );
     } catch (e) {
@@ -350,7 +356,7 @@ export function Composer({
           const [said, up] = await Promise.all([transcribe!(blob), upload ? upload(new File([blob], name, { type })) : Promise.resolve(null)]);
           const text = said.trim();
           if (!text) throw new Error(t.voiceEmpty);
-          const atts: Attachment[] = up ? [{ name, mimeType: type, data: "", uri: up.url, ...(up.id ? { fileId: up.id } : {}) }] : [];
+          const atts: Attachment[] = up ? [{ name, mimeType: type, url: up.url }] : [];
           onSubmit(voiceNoteText ? voiceNoteText(text) : text, atts);
           setNotice(null);
         } catch (e) {

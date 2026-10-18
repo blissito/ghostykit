@@ -1,5 +1,4 @@
 // Todo lo que Piloto dice, en español (default) e inglés. Una app cambia lo que quiera con `strings`.
-import type { ConnectPhase } from "../core/types";
 
 export interface PilotStrings {
   /** Para formatear números y moneda. */
@@ -7,7 +6,6 @@ export interface PilotStrings {
   placeholder: (agentName: string) => string;
   /** Sin `agentName`. */
   placeholderDefault: string;
-  placeholderConnecting: string;
   send: string;
   stop: string;
   uploading: string;
@@ -33,21 +31,12 @@ export interface PilotStrings {
   voiceFailed: string;
   model: string;
   thinking: string;
-  steered: string;
-  /** Lo que se ve mientras conecta, por fase (en primera persona: habla el agente). */
-  waitPhase: Record<ConnectPhase, string>;
   /** Qué dice el agente de un turno del que sólo sabe cuánto lleva. */
   howItGoes: (seconds: number) => string;
   /** Frases propias mientras piensa (rotan cada 4 s en lugar de `howItGoes`). */
   thinkingPhrases?: string[];
   stillWorking: string;
-  cantStart: string;
   retry: string;
-  resume: string;
-  /** Con `interrupted.canContinue`: el servidor continúa ESE turno. */
-  continueTurn: string;
-  interrupted: (reason: string) => string;
-  interruptedOurFault: string;
   copy: string;
   copied: string;
   copyMessage: string;
@@ -61,8 +50,6 @@ export interface PilotStrings {
   failed: string;
   step: string;
   replyOptions: string;
-  connectSteps: { label: string; hint: string }[];
-  connectRetry: string;
   linkTitle: string;
   linkCopy: string;
   linkCopied: string;
@@ -72,14 +59,14 @@ export interface PilotStrings {
   confirmTitle: string;
   approve: string;
   reject: string;
-  confirmExpired: string;
-  confirmFailed: string;
   /** «Vence en 14:32». */
   expiresIn: (mmss: string) => string;
   expiredNow: string;
   decisionApproved: string;
   decisionRejected: string;
   decisionExpired: string;
+  decisionCancelled: string;
+  stampCancelled: string;
   stampApproved: string;
   stampRejected: string;
   stampExpired: string;
@@ -89,7 +76,6 @@ export const STRINGS_ES: PilotStrings = {
   numberLocale: "es-MX",
   placeholder: (agent) => `Escríbele a ${agent}`,
   placeholderDefault: "Escríbele al agente",
-  placeholderConnecting: "Conectando con el agente…",
   send: "Enviar",
   stop: "Detener",
   uploading: "Subiendo tu archivo…",
@@ -115,12 +101,6 @@ export const STRINGS_ES: PilotStrings = {
   voiceFailed: "no se pudo mandar la nota de voz",
   model: "Modelo",
   thinking: "Pensando…",
-  steered: "Se lo pasé al turno en curso",
-  waitPhase: {
-    waking: "Me estoy poniendo los lentes 👓",
-    connecting: "Estoy abriendo mi libreta",
-    session: "Estoy pensando",
-  },
   howItGoes: (s) =>
     s < 6 ? "Pensando…"
     : s < 15 ? "Trabajando…"
@@ -129,12 +109,7 @@ export const STRINGS_ES: PilotStrings = {
     : s < 300 ? "Llevo un buen rato…"
     : "Me está tomando mucho — puedes detenerme",
   stillWorking: "Estoy en ello…",
-  cantStart: "No pude arrancar.",
   retry: "Reintentar",
-  resume: "Retomar",
-  continueTurn: "Continuar",
-  interrupted: (reason) => `Me quedé a medias: ${reason}.`,
-  interruptedOurFault: "Se cortó por una falla nuestra, no por tu mensaje.",
   copy: "Copiar",
   copied: "Copiado",
   copyMessage: "Copiar mensaje",
@@ -148,12 +123,6 @@ export const STRINGS_ES: PilotStrings = {
   failed: "Falló",
   step: "Paso",
   replyOptions: "Opciones para responder",
-  connectSteps: [
-    { label: "Despertando al agente", hint: "si estaba dormido, unos segundos" },
-    { label: "Abriendo el canal", hint: "conexión segura con su máquina" },
-    { label: "Creando la sesión", hint: "el agente carga su contexto" },
-  ],
-  connectRetry: "Reintentar",
   linkTitle: "Vas a salir de aquí",
   linkCopy: "Copiar",
   linkCopied: "Copiado",
@@ -163,13 +132,13 @@ export const STRINGS_ES: PilotStrings = {
   confirmTitle: "Necesito tu permiso para",
   approve: "Aprobar",
   reject: "Rechazar",
-  confirmExpired: "Este pedido ya no estaba abierto (se agotó el plazo).",
-  confirmFailed: "No se pudo mandar tu respuesta. Intenta de nuevo.",
   expiresIn: (t) => `Vence en ${t}`,
   expiredNow: "Venció sin respuesta",
   decisionApproved: "Aprobaste",
   decisionRejected: "Rechazaste",
   decisionExpired: "Venció",
+  decisionCancelled: "Descartaste",
+  stampCancelled: "Descartado",
   stampApproved: "Aprobado",
   stampRejected: "Rechazado",
   stampExpired: "Vencido",
@@ -179,7 +148,6 @@ export const STRINGS_EN: PilotStrings = {
   numberLocale: "en-US",
   placeholder: (agent) => `Message ${agent}`,
   placeholderDefault: "Message the agent",
-  placeholderConnecting: "Connecting to the agent…",
   send: "Send",
   stop: "Stop",
   uploading: "Uploading your file…",
@@ -205,12 +173,6 @@ export const STRINGS_EN: PilotStrings = {
   voiceFailed: "couldn't send the voice note",
   model: "Model",
   thinking: "Thinking…",
-  steered: "Passed it to the running turn",
-  waitPhase: {
-    waking: "Putting my glasses on 👓",
-    connecting: "Opening my notebook",
-    session: "Thinking",
-  },
   howItGoes: (s) =>
     s < 6 ? "Thinking…"
     : s < 15 ? "Working…"
@@ -219,12 +181,7 @@ export const STRINGS_EN: PilotStrings = {
     : s < 300 ? "Been at it a while…"
     : "This is taking long — you can stop me",
   stillWorking: "On it…",
-  cantStart: "Couldn't start.",
   retry: "Retry",
-  resume: "Resume",
-  continueTurn: "Continue",
-  interrupted: (reason) => `I stopped halfway: ${reason}.`,
-  interruptedOurFault: "It stopped because of an error on our side, not your message.",
   copy: "Copy",
   copied: "Copied",
   copyMessage: "Copy message",
@@ -238,12 +195,6 @@ export const STRINGS_EN: PilotStrings = {
   failed: "Failed",
   step: "Step",
   replyOptions: "Reply options",
-  connectSteps: [
-    { label: "Waking the agent", hint: "if it was asleep, a few seconds" },
-    { label: "Opening the channel", hint: "secure connection to its machine" },
-    { label: "Creating the session", hint: "the agent loads its context" },
-  ],
-  connectRetry: "Retry",
   linkTitle: "You're about to leave",
   linkCopy: "Copy",
   linkCopied: "Copied",
@@ -253,13 +204,13 @@ export const STRINGS_EN: PilotStrings = {
   confirmTitle: "I need your permission to",
   approve: "Approve",
   reject: "Reject",
-  confirmExpired: "This request was no longer open (it timed out).",
-  confirmFailed: "Couldn't send your answer. Try again.",
   expiresIn: (t) => `Expires in ${t}`,
   expiredNow: "Expired without an answer",
   decisionApproved: "You approved",
   decisionRejected: "You rejected",
   decisionExpired: "Expired",
+  decisionCancelled: "You dismissed",
+  stampCancelled: "Dismissed",
   stampApproved: "Approved",
   stampRejected: "Rejected",
   stampExpired: "Expired",

@@ -180,6 +180,9 @@ function StepLine({ tool, times, live }: { tool: ToolEntry; times: number; live:
       <span className="flex h-5 w-5 shrink-0 items-center justify-center" aria-label={spins ? t.running : tool.status === "failed" ? t.failed : t.done}>
         {spins ? (
           <Loader2 className="h-4 w-4 animate-spin text-text-info" />
+        ) : tool.status === "pending" ? (
+          // Espera aprobación (el run se detuvo en un interrupt): ni gira ni está lista.
+          <Clock className="h-4 w-4 text-text-tertiary" />
         ) : tool.status === "failed" ? (
           <CircleX className="h-4 w-4 text-text-danger" />
         ) : (

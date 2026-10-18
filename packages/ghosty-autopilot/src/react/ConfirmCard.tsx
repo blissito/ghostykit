@@ -1,16 +1,15 @@
-// La tarjeta de aprobación — la pieza que distingue a Piloto. El agente pide permiso (evento
-// `permission`) antes de algo riesgoso y la tarjeta se lee como un PASE: qué quiere hacer, con qué
+// La tarjeta de aprobación — la pieza que distingue a Ghosty Autopilot. El run de AG-UI terminó con
+// `outcome: interrupt` y la tarjeta se lee como un PASE: qué quiere hacer el agente, con qué
 // herramienta, cuánto le queda (la mecha se consume) y dos salidas. Al contestar cae el SELLO
 // («Aprobado», «Rechazado») y luego la tarjeta se recoge en una línea bajo la respuesta.
 //
-// `onRespond` sólo CONTESTA (el transporte o la ruta de la app, con su sesión). `onSettled` llega
-// cuando el sello ya se vio: ahí se anota la decisión y la tarjeta sale.
+// `onRespond` CONTESTA (el `resume` sale en el siguiente run). `onSettled` llega cuando el sello ya se
+// vio: ahí se anota la decisión y la tarjeta sale.
 import { CircleCheck, CircleSlash, Clock, ShieldAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { expiryMs } from "../core/reducer";
 import type { Decision, PermissionOption, PermissionRequest } from "../core/types";
 import { usePiloto } from "./context";
-import type { PermissionAnswer } from "./usePilot";
 
 /** Las opciones de rechazo van primero y discretas; las de aprobar, al final y en color. */
 export const isRejectOption = (o: PermissionOption) => /^reject|deny|cancel/i.test(o.kind ?? o.optionId);
@@ -47,16 +46,15 @@ export function ConfirmCard({
   onExpire,
 }: {
   request: PermissionRequest;
-  /** Contesta (el transporte o la ruta de la app). `{resolved:false}` = ya no estaba abierta. */
-  onRespond: (id: string, optionId: string) => Promise<PermissionAnswer> | PermissionAnswer;
+  /** Contesta: `approved` viaja como `payload` del `resume`. */
+  onRespond: (id: string, approved: boolean) => void;
   /** El sello ya se vio: anotar la decisión y retirar la tarjeta. */
-  onSettled?: (id: string, optionId: string, answer: PermissionAnswer) => void;
+  onSettled?: (id: string, status: Decision["status"]) => void;
   /** Venció sin contestarse. */
   onExpire?: (id: string) => void;
 }) {
   const { strings: t } = usePiloto();
   const [pending, setPending] = useState<string | null>(null);
-  const [problem, setProblem] = useState<string | null>(null);
   const [stamp, setStamp] = useState<Stamp | null>(null);
   const time = useRemaining(request.expiresAt);
   const expired = time !== null && time.left <= 0;
@@ -70,29 +68,22 @@ export function ConfirmCard({
     return () => clearTimeout(id);
   }, [expired, stamp, onExpire, request.id]);
 
-  const options: PermissionOption[] = request.options.length
-    ? request.options
-    : [
-        { optionId: "reject", name: t.reject, kind: "reject_once" },
-        { optionId: "allow", name: t.approve, kind: "allow_once" },
-      ];
-  const ordered = [...options.filter(isRejectOption), ...options.filter((o) => !isRejectOption(o))];
+  // Rechazar primero y discreto; aprobar al final y en color. Los textos son de la app (`strings`).
+  const ordered: PermissionOption[] = [
+    { optionId: "reject", name: t.reject, kind: "reject_once" },
+    { optionId: "approve", name: t.approve, kind: "allow_once" },
+  ];
 
-  const answer = async (o: PermissionOption) => {
+  const answer = (o: PermissionOption) => {
     setPending(o.optionId);
-    setProblem(null);
-    try {
-      const r = await onRespond(request.id, o.optionId);
-      const status: Stamp = r && r.resolved === false ? "expired" : isRejectOption(o) ? "rejected" : "approved";
-      setStamp(status);
-      setTimeout(() => onSettled?.(request.id, o.optionId, r), STAMP_MS);
-    } catch {
-      setProblem(t.confirmFailed);
-      setPending(null);
-    }
+    const approved = !isRejectOption(o);
+    onRespond(request.id, approved);
+    const status: Stamp = approved ? "approved" : "rejected";
+    setStamp(status);
+    setTimeout(() => onSettled?.(request.id, status), STAMP_MS);
   };
 
-  const stampLabel = stamp === "approved" ? t.stampApproved : stamp === "rejected" ? t.stampRejected : t.stampExpired;
+  const stampLabel = stamp === "approved" ? t.stampApproved : stamp === "rejected" ? t.stampRejected : stamp === "cancelled" ? t.stampCancelled : t.stampExpired;
   const locked = pending !== null || stamp !== null;
 
   return (
@@ -123,7 +114,7 @@ export function ConfirmCard({
               key={o.optionId}
               type="button"
               disabled={locked || expired}
-              onClick={() => void answer(o)}
+              onClick={() => answer(o)}
               className={isRejectOption(o) ? "piloto-btn piloto-btn-quiet" : "piloto-btn piloto-btn-go"}
               aria-busy={pending === o.optionId || undefined}
             >
@@ -136,11 +127,6 @@ export function ConfirmCard({
         <div className="piloto-fuse" aria-hidden>
           <span style={{ transform: `scaleX(${Math.max(0, Math.min(1, time.left / time.total))})` }} />
         </div>
-      )}
-      {problem && (
-        <p className="piloto-ticket-problem" role="alert">
-          {problem}
-        </p>
       )}
       {stamp && (
         <span className="piloto-stamp" data-kind={stamp} role="status">
@@ -158,8 +144,8 @@ export function DecisionLines({ decisions }: { decisions: Decision[] }) {
   return (
     <ul className="piloto-decisions">
       {decisions.map((d) => {
-        const Icon = d.status === "approved" ? CircleCheck : d.status === "rejected" ? CircleSlash : Clock;
-        const label = d.status === "approved" ? t.decisionApproved : d.status === "rejected" ? t.decisionRejected : t.decisionExpired;
+        const Icon = d.status === "approved" ? CircleCheck : d.status === "expired" ? Clock : CircleSlash;
+        const label = d.status === "approved" ? t.decisionApproved : d.status === "rejected" ? t.decisionRejected : d.status === "cancelled" ? t.decisionCancelled : t.decisionExpired;
         return (
           <li key={d.id} className="piloto-decision" data-status={d.status}>
             <Icon className="h-4 w-4 shrink-0" aria-hidden />

@@ -1,13 +1,12 @@
 // Las burbujas del hilo. PORTADAS de Ghosty Studio (`Bubble` de `ChatView.tsx`, `TurnFooter.tsx`,
-// `OpcionesDeRespuesta.tsx`, `MessageUsageStats.tsx`) con el MISMO markup y clases. Lo propio de
-// Ghosty (páginas, PDFs, imágenes, documentos, capturas, subagentes) no está aquí: va por el slot
-// `renderDeliveries`.
+// `OpcionesDeRespuesta.tsx`, `MessageUsageStats.tsx`) con el MISMO markup y clases. Lo propio de cada
+// app bajo la respuesta va por el slot `renderDeliveries`.
 import { ArrowUpRight, Check, Coins, Copy, Gauge, RotateCcw } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { splitNarration } from "../core/narration";
 import { cleanReplyOption, extractReplyOptions, type ReplyOptions } from "../core/options";
 import { systemNoteOf } from "../core/text";
-import type { Delivery, Turn, Usage } from "../core/types";
+import type { Turn, Usage } from "../core/types";
 import { DecisionLines } from "./ConfirmCard";
 import { usePiloto } from "./context";
 import { Markdown } from "./Markdown";
@@ -39,17 +38,16 @@ export function UserBubble({ turn }: { turn: Turn }) {
   const visible = formatUserText(turn.text);
   const atts = turn.attachments ?? [];
   // Imágenes y notas de voz van dentro de la burbuja; los documentos, como tarjetas encima.
-  const inBubble = atts.filter((a) => (a.mimeType.startsWith("image/") && (a.data || a.uri)) || (a.mimeType.startsWith("audio/") && a.uri));
+  const inBubble = atts.filter((a) => (a.mimeType.startsWith("image/") && (a.data || a.url)) || (a.mimeType.startsWith("audio/") && a.url));
   const docs = atts.filter((a) => !inBubble.includes(a));
   return (
     <div className="group/msg flex flex-col items-end gap-1">
-      {turn.steer && <span className="text-[11px] text-text-tertiary">↪ {t.steered}</span>}
       {docs.length > 0 && (
         <div className="mb-1 flex max-w-[75%] flex-wrap justify-end gap-2">
           {docs.map((a, i) => (
             <a
               key={i}
-              href={a.uri}
+              href={a.url}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex max-w-[16rem] items-center gap-1.5 rounded-lg border border-border-primary px-2 py-1 text-xs text-text-tertiary"
@@ -66,9 +64,9 @@ export function UserBubble({ turn }: { turn: Turn }) {
             <div className={`flex flex-wrap justify-end gap-1.5 ${visible.trim() ? "mb-2" : ""}`}>
               {inBubble.map((a, i) =>
                 a.mimeType.startsWith("image/") ? (
-                  <img key={i} src={a.data ? `data:${a.mimeType};base64,${a.data}` : a.uri} alt="" className="h-20 w-20 rounded-lg object-cover" />
+                  <img key={i} src={a.data ? `data:${a.mimeType};base64,${a.data}` : a.url} alt="" className="h-20 w-20 rounded-lg object-cover" />
                 ) : (
-                  <audio key={i} src={a.uri} controls preload="metadata" className="h-9 max-w-[16rem]" />
+                  <audio key={i} src={a.url} controls preload="metadata" className="h-9 max-w-[16rem]" />
                 ),
               )}
             </div>
@@ -190,22 +188,6 @@ export function TurnFooter({ text, seconds, onRetry, showCopy = true, showDurati
   );
 }
 
-/** Las entregas por defecto: una ficha por archivo (las apps pintan las suyas con `renderDeliveries`). */
-export function DeliveryChips({ deliveries }: { deliveries: Delivery[] }) {
-  const shown = deliveries.filter((d) => !d.capture);
-  if (!shown.length) return null;
-  return (
-    <div className="mt-2 flex flex-wrap gap-1.5">
-      {shown.map((d, i) => (
-        <span key={i} className="inline-flex max-w-[16rem] items-center gap-1.5 rounded-lg border border-border-primary px-2 py-1 text-xs text-text-tertiary">
-          <span aria-hidden>📄</span>
-          <span className="truncate">{d.name}</span>
-        </span>
-      ))}
-    </div>
-  );
-}
-
 export interface AgentBubbleProps {
   turn: Turn;
   /** El turno sigue escribiéndose. */
@@ -216,7 +198,7 @@ export interface AgentBubbleProps {
   showUsage?: boolean;
   showCopy?: boolean;
   showDuration?: boolean;
-  /** Las entregas (y lo que la app quiera bajo la respuesta). Sin esto, fichas simples. */
+  /** Lo que la app quiera pintar bajo la respuesta (archivos, tarjetas propias). */
   renderDeliveries?: (turn: Turn, live: boolean) => ReactNode;
 }
 
@@ -243,9 +225,9 @@ export function AgentBubble({ turn, live, onRetry, onOption, showUsage = true, s
         </>
       ) : (
         // Cada tramo nuevo tras una herramienta monta su propio ritmo (empieza de cero).
-        visible && <AnswerText key={`r${narrated.steps.length}`} text={visible} live={live || !!turn.arrived} whole={!!turn.arrived} />
+        visible && <AnswerText key={`r${narrated.steps.length}`} text={visible} live={live} />
       )}
-      {renderDeliveries ? renderDeliveries(turn, live) : turn.deliveries?.length ? <DeliveryChips deliveries={turn.deliveries} /> : null}
+      {renderDeliveries?.(turn, live)}
       {turn.decisions?.length ? <DecisionLines decisions={turn.decisions} /> : null}
       {showUsage && turn.usage && <UsageStats {...turn.usage} />}
       {turn.text && !live && <TurnFooter text={turn.text} seconds={turn.seconds} onRetry={onRetry} showCopy={showCopy} showDuration={showDuration} />}

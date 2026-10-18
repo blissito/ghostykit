@@ -1,91 +1,103 @@
-// El hook: conecta un transporte al reductor puro y traduce los efectos a callbacks de la app.
-// Reemplaza lo que en Ghosty eran `revalidate()` y los eventos `gs:*` de `window`.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+// El hook: corre runs AG-UI por el transporte y los reduce al estado del chat. Arma cada
+// `RunAgentInput` (hilo, run, mensaje nuevo, contexto, respuestas a aprobaciones) y traduce los
+// efectos del reductor a callbacks de la app.
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { BaseEvent, RunAgentInput } from "@ag-ui/core";
 import {
-  RESUME_TEXT,
-  appendAgentMessages,
-  applyHistory,
   beginSend,
   createPilotState,
   dropLastExchange,
   lastUserTurn,
-  reconcileWith,
-  reducePilotEvent,
+  reduceAgUiEvent,
   resolvePermission,
-  resumeMode,
-  sendAccepted,
   sendFailed,
-  sendRejectedBusy,
   stopTurn,
 } from "../core/reducer";
-import type { Attachment, Interrupted, PermissionRequest, PilotState, Reference, SendInput, Turn } from "../core/types";
-import { createSseTransport, type PilotTransport, type SseTransportOptions } from "../transport";
+import type { Attachment, Decision, PermissionRequest, PilotState, Reference, Turn } from "../core/types";
+import { PilotHttpError, type PilotTransport } from "../transport";
 
 export interface TurnDoneInfo {
   /** El texto final de la respuesta. */
   text: string;
-  turnId?: string;
-  /** Cuánto tardó (sólo si lo encargó este cliente). */
+  runId?: string;
+  /** Cuánto tardó. */
   seconds?: number;
-  /** Se cortó por falla del servidor (el chat ofrece Retomar). */
-  interrupted?: Interrupted;
+  /** El run terminó en RUN_ERROR. */
+  error?: string;
+  /** El run se detuvo a pedir aprobación. */
+  interrupted?: boolean;
 }
 
 export interface UsePilotOptions {
-  /** El hilo guardado. Si cambia (la app volvió a leerlo), se reconcilia en reposo. */
+  /** El hilo (AG-UI `threadId`). Con él, al montar se pide el hilo guardado (MESSAGES_SNAPSHOT). Sin él, hilo nuevo. */
+  threadId?: string;
+  /** Turnos para pintar de entrada (sin pedirlos al servidor). */
   initialTurns?: Turn[];
-  /** Lo que el usuario ve en pantalla: viaja con CADA turno. Una función se evalúa al mandar. */
+  /**
+   * Lo que el usuario ve en pantalla: viaja en CADA run como `context` de AG-UI. Un objeto da una
+   * entrada por llave (`{description: llave, value: JSON}`); una función se evalúa al mandar.
+   */
   context?: unknown | (() => unknown);
   onTurnStart?: () => void;
   /** Fin de turno con su texto: aquí la app re-lee datos, repinta efectos, avisa. */
   onTurnDone?: (info: TurnDoneInfo) => void;
-  /** El servidor bautizó el hilo. */
+  /** El servidor bautizó el hilo (`CUSTOM ghosty.title`). */
   onTitle?: (title?: string) => void;
-  /** El servidor pide cuenta (cupo sin cuenta agotado). */
-  onNeedsLogin?: () => void;
-  /** El stream se cerró (el hilo sigue en el servidor y se puede reabrir). */
-  onDisconnected?: () => void;
-  /** Cada evento crudo, antes del reductor (analítica, efectos propios). */
-  onEvent?: (name: string, data: unknown) => void;
-  /** Cada mensaje que sale (analítica: «primer mensaje»). */
-  onSend?: (input: SendInput) => void;
+  /** Cada evento AG-UI crudo, antes del reductor (analítica, STATE_*, CUSTOM propios). */
+  onEvent?: (event: BaseEvent) => void;
+  /** Cada run que sale (analítica). */
+  onSend?: (input: RunAgentInput) => void;
 }
 
 export interface SendOptions {
-  resume?: boolean;
-  resumeTurnId?: string;
   references?: Reference[];
 }
 
 export interface Pilot {
   state: PilotState;
+  threadId: string;
   send: (text: string, attachments?: Attachment[], opts?: SendOptions) => Promise<void>;
+  /** Detiene el run: corta la conexión (el servidor corta el run). */
   stop: () => void;
-  /** Reintenta el último mensaje (quita la respuesta anterior). */
+  /** Reintenta el último mensaje. */
   retry: () => void;
-  /** Turno PERDIDO (no arrancó): se abandona y se reenvía. */
-  abandonAndRetry: () => void;
-  /** «Retomar» un turno cortado por el servidor. */
-  resume: () => void;
-  setModel: (value: string) => void;
-  /**
-   * Contesta una tarjeta. `via` = cómo la contesta la app (p. ej. su ruta de aprobación con la
-   * sesión); sin él, `transport.respondPermission`. La decisión queda anotada en la respuesta.
-   */
-  respondPermission: (id: string, optionId: string, via?: PermissionHandler) => Promise<PermissionAnswer>;
-  /** Anota lo que ya contestó la app (sin volver a contestar): la tarjeta sale y queda la decisión. */
-  recordDecision: (id: string, optionId: string, answer: PermissionAnswer, asked?: PermissionRequest) => void;
-  /** Una tarjeta que venció sin contestarse: sale de las abiertas como «venció». */
+  /** Contesta una tarjeta. Cuando ya están contestadas TODAS las abiertas, sale el `resume`. */
+  respondPermission: (id: string, approved: boolean) => void;
+  /** Anota la decisión bajo la respuesta y retira la tarjeta (tras su sello). */
+  recordDecision: (id: string, status: Decision["status"], asked?: PermissionRequest) => void;
+  /** Una tarjeta venció sin contestarse: se anota y su interrupt viaja como `cancelled` en el siguiente run. */
   expirePermission: (id: string) => void;
-  /** Un mensaje del agente que llegó fuera de un turno: espera a que cierre el turno vivo. */
-  appendAgentMessage: (text: string) => void;
 }
 
-/** Lo que contesta la app al resolver una tarjeta. `resolved: false` = ya no estaba abierta. */
-export type PermissionAnswer = { resolved: boolean; detail?: string } | void;
-export type PermissionHandler = (id: string, optionId: string) => Promise<PermissionAnswer> | PermissionAnswer;
+const uuid = () => {
+  const c = (globalThis as { crypto?: Crypto }).crypto;
+  if (c?.randomUUID) return c.randomUUID();
+  // Respaldo para contextos sin randomUUID.
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (ch) => {
+    const r = (Math.random() * 16) | 0;
+    return (ch === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
+};
 
-const message = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
+/** El contexto de la app como `context` de AG-UI: `[{description, value}]`, `value` siempre texto. */
+export function toAgUiContext(ctx: unknown): RunAgentInput["context"] {
+  if (ctx === undefined || ctx === null) return [];
+  if (Array.isArray(ctx) && ctx.every((c) => c && typeof c === "object" && "description" in c && "value" in c)) return ctx as RunAgentInput["context"];
+  const str = (v: unknown) => (typeof v === "string" ? v : JSON.stringify(v));
+  if (typeof ctx === "object" && !Array.isArray(ctx)) return Object.entries(ctx as Record<string, unknown>).filter(([, v]) => v !== undefined).map(([k, v]) => ({ description: k, value: str(v) }));
+  return [{ description: "context", value: str(ctx) }];
+}
+
+/** El mensaje del usuario como mensaje AG-UI (texto + adjuntos como partes). */
+function userMessage(text: string, attachments: Attachment[]): RunAgentInput["messages"][number] {
+  if (!attachments.length) return { id: uuid(), role: "user", content: text };
+  const parts: unknown[] = text ? [{ type: "text", text }] : [];
+  for (const a of attachments) {
+    const type = a.mimeType.startsWith("image/") ? "image" : a.mimeType.startsWith("audio/") ? "audio" : "document";
+    parts.push({ type, mimeType: a.mimeType, ...(a.name ? { filename: a.name } : {}), source: a.url ? { type: "url", value: a.url } : { type: "data", value: a.data ?? "", mimeType: a.mimeType } });
+  }
+  return { id: uuid(), role: "user", content: parts } as RunAgentInput["messages"][number];
+}
 
 export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions = {}): Pilot {
   const [state, setState] = useState<PilotState>(() => createPilotState(opts.initialTurns ?? []));
@@ -94,111 +106,106 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
   optsRef.current = opts;
   const transportRef = useRef(transport);
   transportRef.current = transport;
-  /** Mensajes del agente que llegaron con un turno vivo: se pintan al cerrarlo. */
-  const pendingWakes = useRef<string[]>([]);
+  const [threadId] = useState(() => opts.threadId ?? uuid());
+  const ctrl = useRef<AbortController | null>(null);
+  /** Respuestas a tarjetas que esperan a las demás (un resume debe cubrirlas todas). */
+  const answers = useRef(new Map<string, { status: "resolved" | "cancelled"; payload?: unknown }>());
 
   const commit = useCallback((next: PilotState) => {
-    const prev = ref.current;
-    if (next === prev) return;
+    if (next === ref.current) return;
     ref.current = next;
     setState(next);
     const o = optsRef.current;
     for (const e of next.effects) {
       if (e.type === "turn-start") o.onTurnStart?.();
-      else if (e.type === "turn-done") o.onTurnDone?.({ text: e.text, turnId: e.turnId, seconds: e.seconds });
-      else if (e.type === "turn-interrupted") {
-        const last = next.turns[next.turns.length - 1];
-        o.onTurnDone?.({ text: last?.role === "assistant" ? last.text : "", turnId: e.turnId, interrupted: { reason: e.reason, turnId: e.turnId } });
-      } else if (e.type === "needs-login") o.onNeedsLogin?.();
+      else if (e.type === "turn-done") o.onTurnDone?.({ text: e.text, runId: e.runId, seconds: e.seconds, error: e.error, interrupted: e.interrupted });
       else if (e.type === "title") o.onTitle?.(e.title);
-      else if (e.type === "disconnected") o.onDisconnected?.();
-    }
-    // El remate que esperaba a que cerrara el turno: va debajo de la respuesta, como en el hilo guardado.
-    if (prev.busy && !next.busy && pendingWakes.current.length) {
-      const texts = pendingWakes.current.splice(0);
-      const after = appendAgentMessages(ref.current, texts);
-      ref.current = after;
-      setState(after);
     }
   }, []);
 
-  useEffect(() => {
-    if (!transport) return;
-    let off: (() => void) | null = null;
-    let gone = false;
-    const subscribe = () => {
-      if (gone) return;
-      off = transport.subscribe(
-        (name, data) => {
-          optsRef.current.onEvent?.(name, data);
-          commit(reducePilotEvent(ref.current, name, data));
-        },
-        { isBusy: () => ref.current.busy },
-      );
-    };
-    // El hilo guardado ANTES del stream: si hay un turno vivo, su `snapshot` va debajo.
-    if (transport.history && !optsRef.current.initialTurns) {
-      transport
-        .history()
-        .then((h) => {
-          if (gone) return;
-          const { turns, permissions } = Array.isArray(h) ? { turns: h, permissions: [] } : h;
-          commit(applyHistory(ref.current, turns, permissions));
-        })
-        .catch(() => {})
-        .finally(subscribe);
-    } else subscribe();
-    return () => {
-      gone = true;
-      off?.();
-    };
-  }, [transport, commit]);
-
-  // La copia del hilo cambió: trae los mensajes que se mandaron desde OTRO cliente. Sólo en reposo.
-  const first = useRef(true);
-  useEffect(() => {
-    if (first.current) {
-      first.current = false;
-      return;
-    }
-    if (opts.initialTurns) commit(reconcileWith(ref.current, opts.initialTurns));
-  }, [opts.initialTurns, commit]);
-
-  const send = useCallback(
-    async (text: string, attachments: Attachment[] = [], extra: SendOptions = {}) => {
+  /** Corre un run y reduce sus eventos. Si el stream se corta sin terminar, se reabre el hilo (snapshot). */
+  const runNow = useCallback(
+    async (partial: Pick<RunAgentInput, "messages"> & Partial<RunAgentInput>, reopening = false): Promise<void> => {
       const t = transportRef.current;
       if (!t) return;
-      const s0 = ref.current;
-      const inFlight = s0.busy;
       const ctx = optsRef.current.context;
-      const input: SendInput = {
-        text,
-        attachments,
-        firstTurn: s0.turns.length === 0,
-        ...(extra.resume ? { resume: true } : {}),
-        ...(extra.resumeTurnId ? { resumeTurnId: extra.resumeTurnId } : {}),
-        ...(extra.references?.length ? { references: extra.references } : {}),
-        ...(ctx !== undefined ? { context: typeof ctx === "function" ? (ctx as () => unknown)() : ctx } : {}),
+      const input: RunAgentInput = {
+        threadId,
+        runId: uuid(),
+        tools: [],
+        context: toAgUiContext(typeof ctx === "function" ? (ctx as () => unknown)() : ctx),
+        state: {},
+        forwardedProps: {},
+        ...partial,
       };
-      commit(beginSend(s0, text, attachments));
+      ctrl.current?.abort();
+      const c = new AbortController();
+      ctrl.current = c;
       optsRef.current.onSend?.(input);
+      let ended = false;
       try {
-        const r = await t.send(input);
-        commit(sendAccepted(ref.current, r, inFlight));
-      } catch (e) {
-        if ((e as { code?: string })?.code === "turn_busy") {
-          commit(sendRejectedBusy(ref.current, message(e, "Ya hay un turno en curso.")));
-          return;
+        await t.run(
+          input,
+          (e) => {
+            if (c.signal.aborted) return;
+            optsRef.current.onEvent?.(e);
+            if (e.type === "RUN_FINISHED" || e.type === "RUN_ERROR") ended = true;
+            commit(reduceAgUiEvent(ref.current, e as never));
+          },
+          c.signal,
+        );
+      } catch (err) {
+        if (c.signal.aborted) return;
+        const code = err instanceof PilotHttpError ? err.code : undefined;
+        // Ya hay un run vivo, o aprobaciones sin contestar: se abre el hilo para verlas.
+        if ((code === "run_active" || code === "interrupt_pending") && !reopening) {
+          commit({ ...ref.current, notice: err instanceof Error ? err.message : null, effects: [] });
+          return runNow({ messages: [] }, true);
         }
-        commit(sendFailed(ref.current, message(e, "No se pudo mandar el mensaje"), Boolean((e as { needsLogin?: boolean })?.needsLogin)));
+        commit(sendFailed(ref.current, err instanceof Error && err.message ? err.message : "No se pudo hablar con el agente."));
+        return;
       }
+      if (ended || c.signal.aborted) return;
+      // Se cortó a media respuesta (red, deploy): el hilo vive en el servidor, se pide de nuevo.
+      if (!reopening) return runNow({ messages: [] }, true);
+      commit(sendFailed(ref.current, "Se cortó la conexión con el agente."));
     },
-    [commit],
+    [commit, threadId],
+  );
+
+  // Abrir un hilo existente: su historia y, si está en pausa, sus tarjetas.
+  useEffect(() => {
+    if (!transport || !opts.threadId) return;
+    void runNow({ messages: [] }, true);
+    return () => ctrl.current?.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transport]);
+
+  /** Las tarjetas abiertas que el siguiente run debe cerrar (las que se ignoraron o vencieron). */
+  const pendingResume = () => [
+    ...ref.current.permissions.filter((p) => !answers.current.has(p.id)).map((p) => ({ interruptId: p.id, status: "cancelled" as const })),
+    ...[...answers.current.entries()].map(([interruptId, a]) => ({ interruptId, ...a })),
+  ];
+
+  const send = useCallback(
+    async (text: string, attachments: Attachment[] = [], _extra: SendOptions = {}) => {
+      if (!transportRef.current || ref.current.busy) return;
+      // Mandar un mensaje con tarjetas abiertas las descarta (AG-UI pide cerrarlas en el mismo run).
+      const resume = pendingResume();
+      answers.current.clear();
+      let s = ref.current;
+      for (const p of s.permissions) s = resolvePermission(s, p.id, "cancelled");
+      commit(beginSend(s, text, attachments));
+      await runNow({ messages: [userMessage(text, attachments)], ...(resume.length ? { resume } : {}) });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [commit, runNow],
   );
 
   const stop = useCallback(() => {
+    ctrl.current?.abort();
+    ctrl.current = null;
     commit(stopTurn(ref.current));
-    void transportRef.current?.cancel();
   }, [commit]);
 
   const retry = useCallback(() => {
@@ -209,76 +216,38 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
     void send(last.text, last.attachments ?? []);
   }, [commit, send]);
 
-  const abandonAndRetry = useCallback(() => {
-    const s = ref.current;
-    const last = lastUserTurn(s.turns);
-    if (!last) return;
-    commit({ ...dropLastExchange(s), busy: false });
-    void send(last.text, last.attachments ?? []);
-  }, [commit, send]);
-
-  const resume = useCallback(() => {
-    const s = ref.current;
-    if (s.busy) return;
-    commit({ ...s, interrupted: null, effects: [] });
-    if (resumeMode(s.turns) === "resend") abandonAndRetry();
-    else void send(RESUME_TEXT, [], { resume: true, resumeTurnId: s.interrupted?.turnId });
-  }, [commit, send, abandonAndRetry]);
-
-  const setModel = useCallback(
-    (value: string) => {
-      // Optimista: el stream confirma el valor real cuando el agente responde.
-      commit({ ...ref.current, currentModel: value, effects: [] });
-      void transportRef.current?.setModel?.(value);
-    },
-    [commit],
-  );
+  const sendAnswersIfComplete = useCallback(() => {
+    const open = ref.current.permissions.filter((p) => !answers.current.has(p.id));
+    if (open.length || !answers.current.size || ref.current.busy) return;
+    const resume = [...answers.current.entries()].map(([interruptId, a]) => ({ interruptId, ...a }));
+    answers.current.clear();
+    commit(beginSend(ref.current, "", []));
+    void runNow({ messages: [], resume });
+  }, [commit, runNow]);
 
   const respondPermission = useCallback(
-    async (id: string, optionId: string, via?: PermissionHandler) => {
-      const t = transportRef.current;
-      const handler: PermissionHandler | undefined = via ?? (t?.respondPermission ? (a, b) => t.respondPermission!(a, b) : undefined);
-      if (!handler) throw new Error("ghosty-autopilot: el transporte no sabe contestar permisos (pasa `onPermission`)");
-      const asked = ref.current.permissions.find((p) => p.id === id);
-      const r = await handler(id, optionId);
-      // Contestada o vencida, la tarjeta sale de las abiertas y queda anotada en la respuesta.
-      commit(resolvePermission(ref.current, id, optionId, r ? r.resolved !== false : true, r ? r.detail : undefined, asked));
-      return r;
+    (id: string, approved: boolean) => {
+      answers.current.set(id, { status: "resolved", payload: { approved } });
+      sendAnswersIfComplete();
     },
-    [commit],
+    [sendAnswersIfComplete],
   );
 
   const recordDecision = useCallback(
-    (id: string, optionId: string, r: PermissionAnswer, asked?: PermissionRequest) =>
-      commit(resolvePermission(ref.current, id, optionId, r ? r.resolved !== false : true, r ? r.detail : undefined, asked)),
+    (id: string, status: Decision["status"], asked?: PermissionRequest) => commit(resolvePermission(ref.current, id, status, asked)),
     [commit],
   );
 
   const expirePermission = useCallback(
     (id: string) => {
-      if (ref.current.permissions.some((p) => p.id === id)) commit(resolvePermission(ref.current, id, "", false));
+      if (!ref.current.permissions.some((p) => p.id === id)) return;
+      // Vencida: viaja como `cancelled` cuando salga el siguiente run (con otra respuesta o un mensaje).
+      answers.current.set(id, { status: "cancelled" });
+      commit(resolvePermission(ref.current, id, "expired"));
+      sendAnswersIfComplete();
     },
-    [commit],
+    [commit, sendAnswersIfComplete],
   );
 
-  const appendAgentMessage = useCallback(
-    (text: string) => {
-      if (ref.current.busy) {
-        pendingWakes.current.push(text);
-        return;
-      }
-      commit(appendAgentMessages(ref.current, [text]));
-    },
-    [commit],
-  );
-
-  return { state, send, stop, retry, abandonAndRetry, resume, setModel, respondPermission, recordDecision, expirePermission, appendAgentMessage };
-}
-
-/** Un transporte SSE estable por `base` (crearlo en cada render reabriría el stream). */
-export function useSseTransport(base: string | null | undefined, opts?: SseTransportOptions): PilotTransport | null {
-  const optsRef = useRef(opts);
-  optsRef.current = opts;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  return useMemo(() => (base ? createSseTransport(base, optsRef.current) : null), [base]);
+  return { state, threadId, send, stop, retry, respondPermission, recordDecision, expirePermission };
 }

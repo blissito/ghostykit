@@ -7,7 +7,6 @@
  * la respuesta crece debajo sin mover nada (un espaciador encoge lo que ella crece). Cuando ya no
  * cabe, el chat la sigue… salvo que subas: ahí se suelta hasta que vuelvas al final.
  */
-import { AnimatePresence } from "motion/react";
 import { ArrowDown } from "lucide-react";
 import {
   forwardRef,
@@ -23,17 +22,16 @@ import {
 } from "react";
 import { isRunning, TOOL_VERBS_EN, TOOL_VERBS_ES, type ToolVerbs } from "../core/steps";
 import { applyReferences, cleanUserText } from "../core/text";
-import type { Attachment, PermissionRequest, Reference, Turn } from "../core/types";
+import type { Attachment, Decision, PermissionRequest, Reference, Turn } from "../core/types";
 import type { PilotTransport } from "../transport";
 import { AgentBubble, UserBubble } from "./Bubble";
 import { ReferenceChips, Suggestions } from "./Chips";
 import { Composer, type UploadResult } from "./Composer";
 import { ConfirmCard } from "./ConfirmCard";
 import { PilotoContext, rootProps, type MarkdownOptions, type PilotIcon, type PilotoConfig, type PilotTheme } from "./context";
-import { initialGate, stepGate } from "./connectingGate";
-import { ConnectingState, TypingDots, WaitLabel } from "./Status";
+import { TypingDots, WaitLabel } from "./Status";
 import { STRINGS_EN, STRINGS_ES, type PilotStrings } from "./strings";
-import { usePilot, type PermissionHandler, type Pilot, type UsePilotOptions } from "./usePilot";
+import { usePilot, type Pilot, type UsePilotOptions } from "./usePilot";
 
 export interface PilotoFeatures {
   /** Botones de adjuntar. Default: sí si hay `upload`. */
@@ -44,8 +42,6 @@ export interface PilotoFeatures {
   copy?: boolean;
   /** Tokens y costo bajo cada respuesta. Default: sí. */
   usage?: boolean;
-  /** Selector de modelo (si el agente ofrece varios). Default: sí. */
-  models?: boolean;
   /** Las opciones finales de la última respuesta como botones. Default: sí. */
   replyOptions?: boolean;
   /** «· 12 s» junto a la frase de espera. Default: sí. */
@@ -53,7 +49,7 @@ export interface PilotoFeatures {
 }
 
 export interface PilotoSlots {
-  /** Las entregas de cada respuesta (archivos, páginas, tarjetas propias). */
+  /** Lo que la app pinte bajo cada respuesta (archivos, tarjetas propias). */
   renderDeliveries?: (turn: Turn, live: boolean) => ReactNode;
   /** Botones propios en la barra del composer. */
   composerExtras?: ReactNode;
@@ -92,11 +88,6 @@ export interface PilotoProps extends UsePilotOptions {
   voiceNoteText?: (transcript: string) => string;
   features?: PilotoFeatures;
   /**
-   * Contestar un permiso (p. ej. el POST de aprobación de la app, con su sesión). Default:
-   * `transport.respondPermission`. Devuelve `{resolved:false}` si ya no estaba abierto.
-   */
-  onPermission?: PermissionHandler;
-  /**
    * Una pregunta lista en la caja (sin mandarla) y el foco en ella: al abrir el piloto desde una
    * fila («Pídeselo»). Cambiar el texto —o `key`, para repetir el mismo— la vuelve a poner.
    */
@@ -128,7 +119,7 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
   const own = usePilot(external ? null : transport, props);
   const pilot = external ?? own;
   const { state } = pilot;
-  const { turns, busy, connected, phase, error, notice, interrupted, permissions } = state;
+  const { turns, busy, error, notice, permissions } = state;
 
   const strings = useMemo<PilotStrings>(() => ({ ...(locale === "en" ? STRINGS_EN : STRINGS_ES), ...props.strings }), [locale, props.strings]);
   const config = useMemo<PilotoConfig>(
@@ -197,24 +188,23 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
     [send, setRefs],
   );
 
-  // Una tarjeta contestada se queda a la vista mientras cae su sello, aunque el stream ya la haya
-  // retirado (`permission-resolved` llega antes de que la app termine de contestar).
+  // Una tarjeta contestada se queda a la vista mientras cae su sello (el run que la contesta puede
+  // traer un snapshot que ya no la incluye).
   const [held, setHeld] = useState<Record<string, PermissionRequest>>({});
+  // En un ref también: `settle` corre en un setTimeout del render en que se contestó.
+  const heldRef = useRef(held);
+  heldRef.current = held;
   const releaseHeld = (id: string) => setHeld(({ [id]: _, ...rest }) => rest);
-  const respond = async (id: string, optionId: string) => {
+  const respond = (id: string, approved: boolean) => {
     const req = permissions.find((p) => p.id === id);
-    if (req) setHeld((h) => ({ ...h, [id]: req }));
-    const handler = props.onPermission ?? (transport?.respondPermission ? (a: string, b: string) => transport.respondPermission!(a, b) : undefined);
-    if (!handler) throw new Error("ghosty-autopilot: falta `onPermission` (el transporte no contesta permisos)");
-    try {
-      return await handler(id, optionId);
-    } catch (e) {
-      releaseHeld(id);
-      throw e;
+    if (req) {
+      heldRef.current = { ...heldRef.current, [id]: req };
+      setHeld((h) => ({ ...h, [id]: req }));
     }
+    pilot.respondPermission(id, approved);
   };
-  const settle = (id: string, optionId: string, answer: Parameters<Pilot["recordDecision"]>[2]) => {
-    pilot.recordDecision(id, optionId, answer, held[id]);
+  const settle = (id: string, status: Decision["status"]) => {
+    pilot.recordDecision(id, status, heldRef.current[id]);
     releaseHeld(id);
   };
   const cards = [...permissions, ...Object.values(held).filter((h) => !permissions.some((p) => p.id === h.id))];
@@ -237,11 +227,11 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
     if (el) el.scrollTop = el.scrollHeight;
   }, [turns.length]);
 
-  // El ancla: tu último mensaje (no los steers ni las líneas de sistema). Cambia cuando aparece uno NUEVO.
+  // El ancla: tu último mensaje (no las líneas de sistema). Cambia cuando aparece uno NUEVO.
   let mineIndex = -1;
   for (let i = turns.length - 1; i >= 0; i--) {
     const x = turns[i];
-    if (x.role === "user" && !x.steer && !x.text.startsWith("⏰ ")) {
+    if (x.role === "user" && !x.text.startsWith("⏰ ")) {
       mineIndex = i;
       break;
     }
@@ -308,29 +298,10 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
 
   // ── Lo que se pinta ─────────────────────────────────────────────────────────
   const last = turns[turns.length - 1];
-  const pageInProgress = last?.role === "assistant" && (Boolean(last.planning) || (last.pages ?? []).some((p) => !p.error && (!p.readyAt || p.review?.status === "running")));
-  const toolRunning = busy && last?.role === "assistant" && ((last.tools ?? []).some(isRunning) || pageInProgress);
+  const toolRunning = busy && last?.role === "assistant" && (last.tools ?? []).some(isRunning);
   const empty = turns.length === 0 && !busy;
-  // Un transporte sin stream vivo (POST por turno) está listo desde el inicio.
-  const perTurn = !external && transport?.stream === "per-turn";
-  const ready = connected || perTurn;
-  const placeholder = !ready ? t.placeholderConnecting : (props.placeholder ?? (props.agentName ? t.placeholder(props.agentName) : t.placeholderDefault));
+  const placeholder = props.placeholder ?? (props.agentName ? t.placeholder(props.agentName) : t.placeholderDefault);
   const showFiles = features.attachments ?? Boolean(props.upload);
-
-  // «Conectando» sólo si de verdad tarda, y si sale, se queda un mínimo (ver `connectingGate.ts`).
-  const gateRef = useRef(initialGate(Date.now(), ready));
-  const [showConnecting, setShowConnecting] = useState(false);
-  useEffect(() => {
-    let id: ReturnType<typeof setTimeout> | undefined;
-    const tick = () => {
-      const r = stepGate(gateRef.current, ready, Date.now());
-      gateRef.current = r.gate;
-      setShowConnecting(r.visible);
-      if (r.recheckAt !== null) id = setTimeout(tick, Math.max(0, r.recheckAt - Date.now()));
-    };
-    tick();
-    return () => clearTimeout(id);
-  }, [ready]);
 
   // Lo señalado (referencias con `prompt`) va ARRIBA de la caja, como el chip de «Señalar» de Ghosty;
   // las tarjetas del tablero, dentro.
@@ -346,16 +317,12 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
         onSubmit={send}
         onStop={pilot.stop}
         busy={busy}
-        canSteer={(external ? true : transport?.steer) !== false}
+        canSteer={false}
         placeholder={placeholder}
-        canSeeImages={state.canSeeImages}
         attachments={showFiles}
         upload={props.upload}
         transcribe={props.transcribe}
         voiceNoteText={props.voiceNoteText}
-        models={features.models === false ? [] : state.models}
-        currentModel={state.currentModel}
-        onModelChange={pilot.setModel}
         references={plainRefs}
         onRemoveReference={removeRef}
         onActivateReference={props.onReferenceClick}
@@ -378,13 +345,7 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
           // empezar. Si no cabe (panel bajo), se desplaza: `safe center` nunca empuja nada fuera.
           <div className="gs-scroll flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-4 pb-[10vh] [justify-content:safe_center]">
             {slots.headerActions && <div className="absolute right-4 top-3 flex gap-2">{slots.headerActions}</div>}
-            {/* Sale con su fundido (exit de ConnectingState) antes de que entre el saludo. */}
-            <AnimatePresence mode="wait" initial={false}>
-            {showConnecting ? (
-              <ConnectingState key="connecting" phase={phase} error={error} avatar={props.avatar} />
-            ) : (
-              <div key="welcome">
-              {slots.emptyState ?? (
+            {slots.emptyState ?? (
                 <div className="mb-6 flex flex-col items-center">
                   {props.avatar && <div className="mb-3">{props.avatar}</div>}
                   {props.welcome && (
@@ -400,10 +361,7 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
                     </h1>
                   )}
                 </div>
-              )}
-              </div>
             )}
-            </AnimatePresence>
             <div className="w-full max-w-3xl">
               {slots.aboveComposer}
               {composer}
@@ -454,17 +412,8 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
                 {busy && !toolRunning && !cards.length && (
                   <div className="flex flex-col gap-1.5">
                     <TypingDots />
-                    <WaitLabel phase={phase} since={state.turnStartedAt} elsewhere={state.elsewhere} onLost={pilot.abandonAndRetry} showDuration={features.duration !== false} />
+                    <WaitLabel since={state.turnStartedAt} showDuration={features.duration !== false} />
                   </div>
-                )}
-                {/* El turno se cortó por falla del servidor: en primera persona y con salida. */}
-                {interrupted && !busy && (
-                  <p className="text-sm text-text-secondary">
-                    {/me quedé a medias|i stopped halfway/i.test(last?.text ?? "") ? t.interruptedOurFault : t.interrupted(interrupted.reason)}{" "}
-                    <button type="button" onClick={pilot.resume} className="cursor-pointer text-text-primary underline underline-offset-2">
-                      {interrupted.canContinue ? t.continueTurn : t.resume}
-                    </button>
-                  </p>
                 )}
                 {notice && <p className="text-sm text-text-tertiary">{notice}</p>}
                 {error && <p className="text-sm text-text-danger">{error}</p>}
