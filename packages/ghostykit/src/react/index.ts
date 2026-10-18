@@ -10,6 +10,7 @@ export { Composer, ModelPicker, mimeOf, type ComposerProps, type ModelOption, ty
 export { ConfirmCard, DecisionLines } from "./ConfirmCard";
 export { ReferenceChips, Suggestions } from "./Chips";
 export { TypingDots, WaitLabel } from "./Status";
+export { Subagents, type SubagentsProps } from "./Subagents";
 export { PilotoContext, usePiloto, type MarkdownOptions, type PilotIcon, type PilotoConfig, type PilotTheme } from "./context";
 export { STRINGS_EN, STRINGS_ES, type PilotStrings } from "./strings";
 // Lo de core y transport, para quien sólo instala `ghostykit`.

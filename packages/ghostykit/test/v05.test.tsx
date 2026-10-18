@@ -253,7 +253,7 @@ describe("usePilot 0.5.0", () => {
     });
   });
 
-  it("un steer rechazado (409 run_active) no suelta el run: reabre el hilo", async () => {
+  it("un steer rechazado (409 run_active) no suelta el run: reabre el hilo y el mensaje queda en espera", async () => {
     const live = hanging();
     const { transport, inputs } = scripted(
       async (input, emit, signal) => {
@@ -276,8 +276,8 @@ describe("usePilot 0.5.0", () => {
     });
     await act(async () => void (await pilot().send("otra")));
     expect(inputs[2].messages).toEqual([]);
-    expect(pilot().state.notice).toBe("Ya hay un turno en curso.");
     expect(pilot().state.turns.map((t) => t.text)).toEqual(["hola", "Sigo."]);
+    expect(pilot().state.queued.map((q) => q.text)).toEqual(["otra"]);
     await act(async () => {
       live.release();
       await first;

@@ -59,10 +59,10 @@ export interface PilotoSlots {
   emptyState?: ReactNode;
   /** Arriba a la derecha, sobre el hilo (compartir, abrir en grande…). */
   headerActions?: ReactNode;
-  /** Pegado arriba del composer (un aviso, un banner). */
-  aboveComposer?: ReactNode;
-  /** Un panel junto al chat (subagentes, vista previa), con el estado del agente. */
-  sidePanel?: (agentState: Record<string, unknown>) => ReactNode;
+  /** Pegado arriba del composer (un aviso, un banner, `<Subagents pilot={pilot} />`). */
+  aboveComposer?: ReactNode | ((pilot: Pilot) => ReactNode);
+  /** Un panel junto al chat (subagentes, vista previa), con el estado del agente y el piloto. */
+  sidePanel?: (agentState: Record<string, unknown>, pilot: Pilot) => ReactNode;
 }
 
 export interface PilotoProps extends UsePilotOptions {
@@ -355,11 +355,13 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
     slots.sidePanel ? (
       <div className="flex min-h-0 flex-1 flex-row">
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">{chat}</div>
-        {slots.sidePanel(state.agentState)}
+        {slots.sidePanel(state.agentState, pilot)}
       </div>
     ) : (
       chat
     );
+
+  const aboveComposer = typeof slots.aboveComposer === "function" ? slots.aboveComposer(pilot) : slots.aboveComposer;
 
   const permissionCards = cards.map((p: PermissionRequest) => (
     <ConfirmCard key={p.id} request={p} onRespond={respond} onSettled={settle} onExpire={pilot.expirePermission} />
@@ -393,7 +395,7 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
                 </div>
             )}
             <div className="w-full max-w-3xl">
-              {slots.aboveComposer}
+              {aboveComposer}
               {composer}
               {props.suggestions && <Suggestions items={props.suggestions} onPick={(s) => send(s)} onPrefill={(s) => setDraftState((d) => ({ text: s, n: d.n + 1 }))} />}
             </div>
@@ -448,6 +450,13 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
                     </div>
                   );
                 })}
+                {state.queued.map((q, i) => (
+                  // Esperan a que termine el run vivo (el servidor no los dejó entrar): salen solos.
+                  <div key={`q${i}`} data-queued className="flex flex-col items-end gap-1 opacity-60">
+                    <UserBubble turn={{ role: "user", text: q.text, ...(q.attachments ? { attachments: q.attachments } : {}) }} />
+                    <span className="text-xs text-text-tertiary">{t.queued}</span>
+                  </div>
+                ))}
                 {permissionCards}
                 {busy && !toolRunning && !cards.length && (
                   <div className="flex flex-col gap-1.5">
@@ -471,7 +480,7 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
                   <ArrowDown className="h-4 w-4" />
                 </button>
               )}
-              {slots.aboveComposer}
+              {aboveComposer}
               {composer}
             </div>
           </>

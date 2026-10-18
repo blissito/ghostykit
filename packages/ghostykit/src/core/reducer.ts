@@ -7,7 +7,7 @@
 // segundos, uso, decisiones y pensamiento).
 import type { Interrupt, Message } from "@ag-ui/core";
 import { applyJsonPatch, type PatchOp } from "./jsonPatch";
-import type { Attachment, CustomEntry, Decision, HistoryPage, PermissionOption, PermissionRequest, PilotEffect, PilotState, ToolEntry, Turn } from "./types";
+import type { Attachment, CustomEntry, Decision, HistoryPage, PermissionOption, PermissionRequest, PilotEffect, PilotState, SubagentTask, ToolEntry, Turn } from "./types";
 
 export function createPilotState(turns: Turn[] = []): PilotState {
   return {
@@ -23,6 +23,8 @@ export function createPilotState(turns: Turn[] = []): PilotState {
     step: null,
     history: null,
     olderCount: 0,
+    queued: [],
+    openText: null,
     effects: [],
   };
 }
@@ -202,6 +204,8 @@ function applySnapshot(s: PilotState, messages: Message[]): PilotState {
     olderCount: prefix.length,
     history: keepOlder ? s.history : (s.historyNext ?? null),
     historyNext: undefined,
+    // Lo abierto no viene en el snapshot: si sigue, el servidor lo re-emite enseguida.
+    openText: null,
   };
 }
 
@@ -211,19 +215,31 @@ export function reduceAgUiEvent(prev: PilotState, e: Ev, now: number = Date.now(
   switch (e.type) {
     case "RUN_STARTED":
       return { ...s, busy: true, error: null, step: null, runId: e.runId ?? s.runId };
-    case "TEXT_MESSAGE_START":
+    case "TEXT_MESSAGE_START": {
       if (e.role && e.role !== "assistant") return s;
+      const id = typeof e.messageId === "string" ? e.messageId : null;
+      const last = s.turns[s.turns.length - 1];
+      // El mismo mensaje otra vez (re-emisión al reconectar): su texto vuelve a empezar, no se duplica.
+      if (id && s.openText?.id === id && last?.role === "assistant" && last.text.length >= s.openText.start) {
+        const start = s.openText.start;
+        return patchAssistant(s, (t) => ({ ...t, text: t.text.slice(0, start) }));
+      }
       // Un mensaje nuevo del mismo turno va en párrafo aparte.
-      return patchAssistant(s, (t) => ({ ...t, text: t.text && !t.text.endsWith("\n") ? `${t.text}\n\n` : t.text }));
+      const next = patchAssistant(s, (t) => ({ ...t, text: t.text && !t.text.endsWith("\n") ? `${t.text}\n\n` : t.text }));
+      return { ...next, openText: id ? { id, start: next.turns[next.turns.length - 1].text.length } : null };
+    }
     case "TEXT_MESSAGE_CONTENT":
     case "TEXT_MESSAGE_CHUNK":
       if (e.role && e.role !== "assistant") return s;
       if (typeof e.delta !== "string" || !e.delta) return s;
       return patchAssistant(s, (t) => ({ ...t, text: t.text + e.delta }));
     case "TEXT_MESSAGE_END":
-      return s;
-    case "TOOL_CALL_START":
-      return upsertTool(s, e.toolCallId, { title: e.toolCallName, status: "in_progress" });
+      return s.openText && s.openText.id === e.messageId ? { ...s, openText: null } : s;
+    case "TOOL_CALL_START": {
+      // Un START de una tool que ya teníamos (re-emisión al reconectar) vuelve a mandar sus args enteros.
+      const known = s.turns[s.turns.length - 1]?.tools?.some((x) => x.id === e.toolCallId);
+      return upsertTool(s, e.toolCallId, { title: e.toolCallName, status: "in_progress", ...(known ? { args: "" } : {}) });
+    }
     case "TOOL_CALL_CHUNK": {
       const known = s.turns[s.turns.length - 1]?.tools?.find((x) => x.id === e.toolCallId);
       let next = known ? s : upsertTool(s, e.toolCallId, { title: e.toolCallName, status: "in_progress" });
@@ -307,7 +323,7 @@ function toHistory(v: unknown): HistoryPage | null {
 }
 
 function finish(s0: PilotState, e: Ev, now: number, failed = false): PilotState {
-  let s: PilotState = { ...s0, busy: false, step: null };
+  let s: PilotState = { ...s0, busy: false, step: null, openText: null };
   const outcome = e.outcome as { type?: string; interrupts?: Interrupt[] } | undefined;
   const interrupted = outcome?.type === "interrupt" && Array.isArray(outcome.interrupts) && outcome.interrupts.length > 0;
   // Las tarjetas abiertas son las del último run: si terminó bien o se canceló, ya no hay.
@@ -364,7 +380,43 @@ export function beginSend(prev: PilotState, text: string, attachments: Attachmen
  * diga después va en una respuesta nueva debajo; el run (y su reloj) siguen siendo los mismos.
  */
 export function beginSteer(prev: PilotState, text: string): PilotState {
-  return { ...prev, turns: [...prev.turns, { role: "user", text }], notice: null, effects: [] };
+  return { ...prev, turns: [...prev.turns, { role: "user", text }], notice: null, openText: null, effects: [] };
+}
+
+/**
+ * El servidor no dejó entrar el mensaje (409 `run_active` / `interrupt_pending`): su burbuja sale del
+ * hilo y queda en espera; se manda solo cuando termine el run vivo (gs-agui 1 §0.7b-6).
+ */
+export function queueMessage(prev: PilotState, text: string, attachments: Attachment[] = [], tries = 1): PilotState {
+  const turns = [...prev.turns];
+  for (let i = turns.length - 1; i >= 0; i--) {
+    if (turns[i].role === "user" && turns[i].text === text) {
+      turns.splice(i, 1);
+      break;
+    }
+  }
+  return { ...prev, turns, queued: [...prev.queued, { text, ...(attachments.length ? { attachments } : {}), tries }], effects: [] };
+}
+
+/** Saca los mensajes en espera (para mandarlos juntos en un run). */
+export function takeQueued(prev: PilotState): { state: PilotState; queued: PilotState["queued"] } {
+  return { state: { ...prev, queued: [], effects: [] }, queued: prev.queued };
+}
+
+/** Los subagentes del estado del agente (`state.subagents.tasks`); lo que no tiene `id` se descarta. */
+export function subagentsOf(agentState: Record<string, unknown>): SubagentTask[] {
+  const tasks = (agentState.subagents as { tasks?: unknown } | undefined)?.tasks;
+  if (!Array.isArray(tasks)) return [];
+  return tasks.filter((t): t is SubagentTask => Boolean(t) && typeof t === "object" && typeof (t as { id?: unknown }).id === "string");
+}
+
+/** Marca un subagente (p. ej. `stopped` al pedir detenerlo); el siguiente STATE_* manda. */
+export function markSubagent(prev: PilotState, taskId: string, status: SubagentTask["status"]): PilotState {
+  const tasks = subagentsOf(prev.agentState);
+  if (!tasks.some((t) => t.id === taskId)) return prev;
+  const subagents = { ...(prev.agentState.subagents as object), tasks: tasks.map((t) => (t.id === taskId ? { ...t, status } : t)) };
+  const agentState = { ...prev.agentState, subagents };
+  return { ...prev, agentState, effects: [{ type: "state", state: agentState }] };
 }
 
 /**

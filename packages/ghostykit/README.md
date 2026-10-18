@@ -111,10 +111,17 @@ ref.current?.send("Why did this fail?");                     // ask on the user'
 Other options: `strings`, `toolIcons`, `formatUserText`, `markdown`, `features`
 (`attachments`, `retry`, `copy`, `usage`, `replyOptions`, `duration`, `steer`), `references` /
 `onReferencesChange`, `voiceNoteText`, `placeholder`, `avatar`, `initialTurns`, `loadOlder` (earlier
-pages of a long thread), the slot `sidePanel`, and the callbacks `onTurnStart`, `onTitle`, `onState`,
-`onEvent` (every raw AG-UI event), `onSend`. The agent's shared state (`STATE_SNAPSHOT` +
-`STATE_DELTA`) is `pilot.state.agentState`, and each turn's `CUSTOM` events are `turn.custom` (what
-`renderDeliveries` draws). To read the state outside the chat, call `usePilot(transport)` yourself
+pages of a long thread), `forwardedProps` (extra keys for every run, e.g. `{permissions: "ask"}`), the
+slots `sidePanel` and `aboveComposer` (both may take the `pilot`), and the callbacks `onTurnStart`,
+`onTitle`, `onState`, `onEvent` (every raw AG-UI event), `onSend`. The agent's shared state
+(`STATE_SNAPSHOT` + `STATE_DELTA`) is `pilot.state.agentState`, and each turn's `CUSTOM` events are
+`turn.custom` (what `renderDeliveries` draws).
+
+Subagents (`state.subagents.tasks`) are `pilot.subagents`; `pilot.stopSubagent(id)` stops one, and
+`<Subagents pilot={pilot} />` is a ready-made bar ("2 agents working", one row each, *Stop*):
+`slots={{ aboveComposer: (pilot) => <Subagents pilot={pilot} /> }}`. A message the server can't take
+while a run is live (`409 run_active`) waits in `pilot.state.queued` and is sent when that run ends.
+`pilot.refresh()` asks for the thread again (when your own event bus says something changed). To read the state outside the chat, call `usePilot(transport)` yourself
 and pass the result as `pilot`. Every piece is
 exported (`AgentBubble`, `AgentSteps`, `Composer`, `ConfirmCard`, `Markdown`, …) if you want to build
 your own layout.

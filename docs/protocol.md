@@ -47,7 +47,7 @@ Body: `RunAgentInput`.
 | `messages` | **Only what is new in this request**: the user's message, or nothing (see §5) | Append to the stored thread. Never trust the client for older history. |
 | `context` | What the user sees right now, one entry per key; `value` is a string (JSON when structured) | Give it to the agent for this run only. |
 | `resume` | Answers to pending approvals (see §4) | Continue the paused run. |
-| `forwardedProps` | Empty, except `{"cancel": "<runId>"}` to stop a run, or `{"steer": "<runId>"}` to add the message to a live run (§6) | Stop that run / inject the message. |
+| `forwardedProps` | Empty, except `{"cancel": "<runId>"}` to stop a run, `{"steer": "<runId>"}` to add the message to a live run (§6), or `{"stopSubagent": "<taskId>"}` to stop one subagent (§3). The app may add its own keys (`forwardedProps` option), e.g. Ghosty Studio's `{"permissions": "ask" \| "auto"}` | Stop that run / inject the message / stop that subagent. Ignore keys you don't know. |
 | `tools`, `state` | Empty | Ignore unless your agent uses them. |
 
 Attachments go in the user message as AG-UI content parts:
@@ -95,12 +95,36 @@ How each one shows up in the chat:
 | `TOOL_CALL_RESULT` | The step turns into a check. If the tool failed, add `"metadata": {"error": true}` to the event and the step turns red. |
 | `REASONING_MESSAGE_*` | Optional: the collapsible "Thinking…" block. |
 | `STEP_STARTED` / `STEP_FINISHED` | Optional. While nothing else is on screen, a step whose `stepName` the app has a label for (`strings.steps`, built in: `waking`, `session`, `compacting`) replaces the waiting phrase. Other names are not drawn, so framework node names never leak into the chat. |
-| `STATE_SNAPSHOT` / `STATE_DELTA` | Optional. The agent's shared state, given to the app as `pilot.state.agentState` (`STATE_DELTA` is an RFC 6902 JSON Patch over the last snapshot; a patch that doesn't apply is ignored until the next snapshot). One key has meaning for the client: `caps.steer: true` turns on steer (§6). |
+| `STATE_SNAPSHOT` / `STATE_DELTA` | Optional. The agent's shared state, given to the app as `pilot.state.agentState` (`STATE_DELTA` is an RFC 6902 JSON Patch over the last snapshot; a patch that doesn't apply is ignored until the next snapshot). Keys with meaning for the client: `caps.steer: true` turns on steer (§6), and `subagents.tasks` (below). |
 | `CUSTOM` | Kept in the turn as `turn.custom[]` (`{name, value, timestamp}`) for the app to draw (`renderDeliveries`), except the protocol ones in §7. |
 | `RUN_FINISHED` `usage` | Optional: tokens under the answer (`TokenUsage[]`: `[{model, inputTokens, outputTokens}]`). The cost, in USD, goes in `metadata.costUsd`. |
 | `RUN_ERROR` `{message, code?}` | The run ends here, with the message shown in red. Do **not** send `RUN_FINISHED` after it. |
 
 `TEXT_MESSAGE_CHUNK` and `TOOL_CALL_CHUNK` (the compact forms) are accepted too.
+
+### Agent state keys (optional)
+
+```json
+{
+  "caps": { "image": true, "steer": true, "permissions": true, "modelSwitch": true },
+  "model": { "current": "claude-sonnet-5", "options": [ { "value": "…", "name": "…" } ] },
+  "subagents": { "tasks": [ { "id": "…", "title": "…", "status": "running|completed|failed|stopped",
+     "startedAt": 0, "endedAt": 0, "usage": { "tokens": 0, "toolUses": 0 }, "lastTool": "…",
+     "summary": "…", "model": "…", "effort": "…", "delivered": false } ] }
+}
+```
+
+- `STATE_SNAPSHOT` right after `RUN_STARTED` (and after `MESSAGES_SNAPSHOT` when reconnecting), then
+  `STATE_DELTA` while the run lasts. Replacing a whole key is fine:
+  `[{"op": "add", "path": "/subagents", "value": {"tasks": [...]}}]`.
+- **Subagents** are `pilot.subagents` (tasks without an `id` are dropped). To stop one, the client
+  posts a request of its own, with no message and the task in `forwardedProps.stopSubagent`; the
+  backend answers `RUN_STARTED` → `RUN_FINISHED {outcome: {type: "success"}}` and **does not touch
+  the live run**. The new status arrives as a `STATE_DELTA` on the live run's stream; with nothing
+  live, the client asks for the thread again (§5) to get a fresh `STATE_SNAPSHOT`. Subagents that
+  keep working after the run are the backend's to announce out of band (Ghosty Studio: its account
+  bus); the app then calls `pilot.refresh()`.
+- `model` is informative: switching models is the app's own API, not a run.
 
 ## 4. Human approval (interrupt / resume)
 
@@ -201,6 +225,12 @@ must be stable (the client uses them to join history pages).
 - **What a turn delivered** (files, artifacts: the `CUSTOM` events of §7 that the app draws) goes
   in `metadata.custom` of that assistant message, so it is still there after a reload. (`metadata`
   is AG-UI's open field on messages; a top-level extra field could be dropped by a validator.)
+- **Reconnecting in the middle of an answer.** The snapshot carries only **closed** messages. What
+  is still open is re-sent right after it, with the same ids: `TEXT_MESSAGE_START` plus one
+  `TEXT_MESSAGE_CONTENT` with everything written so far (same `messageId`), and each open tool as
+  `TOOL_CALL_START` + `TOOL_CALL_ARGS` (the whole arguments). Then the live deltas follow. The client
+  never duplicates text: a `TEXT_MESSAGE_START` for the message that is already open restarts that
+  message, and a `TOOL_CALL_START` for a known tool restarts its arguments.
 - **A snapshot may also arrive in the middle of a run.** The client replaces the thread and keeps the
   run going: same `runId`, still busy, tool calls without a result still running. To rewrite only the
   answer's text (a guard, a compaction), `CUSTOM ghosty.replace` (§7) is lighter.
@@ -248,15 +278,21 @@ A later snapshot keeps the loaded pages when it starts at a message the client a
   `CUSTOM ghosty.injected {messageId: "msg_07"}` → the run's events until its `RUN_FINISHED`. The
   client stops reading the old stream and follows this one. The snapshot (§5) stores the message
   where it was injected. If the run already ended or the backend can't inject, it answers
-  `409 run_active` (or starts a normal run if nothing is live), and the client reconnects (§5).
+  `409 run_active` (or starts a normal run if nothing is live). The client then **keeps the message**
+  (`pilot.state.queued`, drawn faded under the thread with "Sends when this finishes"), reconnects
+  (§5) to follow the live run, and sends it as a normal run when that run's `RUN_FINISHED` arrives
+  (several waiting messages go together). After three refusals it gives up and shows the error.
+  Steer carries text only: attachments wait for the run to end.
 - **HTTP errors** (before the stream starts; body `{"error": "<code>", "message": "<for people>"}`):
 
 | Status | When | Client does |
 |---|---|---|
 | `400` | Malformed `RunAgentInput` | Shows `message`. |
 | `401` / `403` | Not signed in / not allowed | Shows `message`; the app may ask to sign in. |
-| `409` `{"error":"run_active"}` | A run is already going on this thread | Reconnects (§5) instead of sending. |
-| `409` `{"error":"interrupt_pending"}` | There are unanswered approvals | Reconnects (§5), which shows the cards. |
+| `409` `{"error":"run_active"}` | A run is already going on this thread | Keeps the message, reconnects (§5) and sends it when the run ends. |
+| `409` `{"error":"interrupt_pending"}` | There are unanswered approvals | Keeps the message and reconnects (§5), which shows the cards; it goes out once they are answered and the run ends. |
+| `400` `{"error":"resume_incomplete"}` | A `resume` didn't answer every open interrupt | Never sent by this client: one `resume` always answers them all (§4). |
+| `402` `{"error":"quota_exceeded"}` | The plan's limit | Shows `message`. |
 | `429` + `Retry-After` | Rate limit / no capacity | Shows `message`, then lets the user retry. |
 | `503` + `Retry-After` | Server restarting (deploy) | Retries the **same** request after `Retry-After`, so keep requests idempotent by `runId`. |
 
@@ -267,6 +303,7 @@ A later snapshot keeps the loaded pages when it starts at a message the client a
 All optional. Names starting with `ghosty.` are reserved for this list. The first five are part of
 the protocol, and the client handles them; they and `ghosty.page` are not kept in the turn. The rest are content: they
 go to `turn.custom[]` for the app to draw, and every event also reaches the app through `onEvent`.
+Unknown names (yours) are kept in the turn too.
 
 | `CUSTOM` name | `value` | Meaning |
 |---|---|---|
@@ -275,11 +312,11 @@ go to `turn.custom[]` for the app to draw, and every event also reaches the app 
 | `ghosty.injected` | `{ "messageId": "msg_07" }` | A steer message entered the live run (§6). |
 | `ghosty.replace` | `{ "messageId"?, "content": "…" }` | The backend rewrote the answer (a guard, a compaction): `content` replaces the turn's final text, after its last step; the narration before stays. |
 | `ghosty.tool` | `{ "toolCallId", "title", "kind", "path"?, "detail"? }` | The localized label of a step, sent after its `TOOL_CALL_START`. `title` wins over the app's `toolVerbs`; `kind` picks the icon. |
-| `ghosty.delivery` | `{ "id", "messageId", "url", "tipo", "nombre", "fileId", "mime", "size", "captura" }` | The turn delivered a file or artifact. **A URL, never base64.** Also stored in the message's `metadata.custom` (§5), including the pages `loadOlder` returns. |
-| `ghosty.page` | `{ "event": "…", … }` | A page-builder event (landings). Read by the app through `onEvent`; not kept in the turn. |
-| `ghosty.ui` | `{ "action": "…", … }` | The agent asks the app to do something on screen (move or open a card). |
+| `ghosty.delivery` | `{ "id", "messageId", "url", "tipo": "archivo"\|"artefacto", "subtipo"?, "nombre", "titulo"?, "contenido"?, "fileId"?, "sessionId"?, "docId"?, "mime"?, "size"?, "captura"? }` | The turn delivered a file or artifact; `messageId` is the answer it belongs to. **A signed URL, never base64.** Also stored in the message's `metadata.custom` (§5), including the pages `loadOlder` returns. |
+| `ghosty.page` | `{ "event": "…", … }` | A page-builder event (landings), many per run; re-sent when reconnecting to a live run. Read by the app through `onEvent`; not kept in the turn. |
+| `ghosty.ui` | `{ "action": "move" \| "open", … }` | The agent asks the app to do something on screen (move or open a board card). The app acts on it through `onEvent`. |
 | `ghosty.reply_to` | `{ "messageId": "…" }` | The answer replies to a specific earlier message. |
-| `ghosty.attachments_failed` | `{ "names": ["…"] }` | Attachments of the user's message the agent couldn't read. |
+| `ghosty.attachments_failed` | `{ "names": ["…"], "message": "…" }` | Attachments of the user's message the agent couldn't read; `message` is for people. |
 
 ## 8. Checklist for a backend
 
@@ -291,7 +328,7 @@ go to `turn.custom[]` for the app to draw, and every event also reaches the app 
 4. An empty `messages` with no `resume` answers `MESSAGES_SNAPSHOT` plus the live run, the pending
    interrupt, or success.
 5. A closed connection never stops a run; `forwardedProps.cancel` does. `409`/`429`/`503` as in §6.
-6. Optional: `STATE_SNAPSHOT`/`STATE_DELTA` with `caps`, steer with `forwardedProps.steer`,
+6. Optional: `STATE_SNAPSHOT`/`STATE_DELTA` with `caps` and `subagents`, steer with `forwardedProps.steer`, `forwardedProps.stopSubagent`,
    `ghosty.history` for long threads, and deliveries in `metadata.custom`.
 
 Reference: an agent written with LangGraph and served through its official AG-UI adapter

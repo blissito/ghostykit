@@ -8,12 +8,16 @@ export {
   dropLastExchange,
   expiryMs,
   lastUserTurn,
+  markSubagent,
   messagesToTurns,
   prependHistory,
+  queueMessage,
   reduceAgUiEvent,
   resolvePermission,
   sendFailed,
   stopTurn,
+  subagentsOf,
+  takeQueued,
   toPermission,
 } from "./reducer";
 export { applyJsonPatch, type PatchOp } from "./jsonPatch";

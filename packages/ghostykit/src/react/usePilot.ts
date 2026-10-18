@@ -1,7 +1,7 @@
 // El hook: corre runs AG-UI por el transporte y los reduce al estado del chat. Arma cada
 // `RunAgentInput` (hilo, run, mensaje nuevo, contexto, respuestas a aprobaciones) y traduce los
 // efectos del reductor a callbacks de la app.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { BaseEvent, Message, RunAgentInput } from "@ag-ui/core";
 import {
   beginSend,
@@ -9,13 +9,17 @@ import {
   createPilotState,
   dropLastExchange,
   lastUserTurn,
+  markSubagent,
   prependHistory,
+  queueMessage,
   reduceAgUiEvent,
   resolvePermission,
   sendFailed,
   stopTurn,
+  subagentsOf,
+  takeQueued,
 } from "../core/reducer";
-import type { Attachment, Decision, HistoryPage, PermissionRequest, PilotState, Reference, Turn } from "../core/types";
+import type { Attachment, Decision, HistoryPage, PermissionRequest, PilotState, Reference, SubagentTask, Turn } from "../core/types";
 import { PilotHttpError, type PilotTransport } from "../transport";
 
 export interface TurnDoneInfo {
@@ -61,6 +65,11 @@ export interface UsePilotOptions {
    * lectura de la app. Las páginas empiezan en un mensaje del usuario.
    */
   loadOlder?: (before: string | undefined) => Promise<{ messages: Message[] } & HistoryPage>;
+  /**
+   * Lo que viaja en `forwardedProps` de cada run, además de lo del protocolo (`cancel`, `steer`,
+   * `stopSubagent`), p. ej. `{permissions: "ask"}` en gs. Una función se evalúa al mandar.
+   */
+  forwardedProps?: Record<string, unknown> | (() => Record<string, unknown>);
 }
 
 export interface SendOptions {
@@ -86,7 +95,19 @@ export interface Pilot {
   /** Antepone la página anterior del hilo (si hay `loadOlder` y `state.history.hasMoreBefore`). */
   loadOlder: () => Promise<void>;
   loadingOlder: boolean;
+  /** Los subagentes del agente (`state.subagents.tasks`), al día con cada STATE_SNAPSHOT/DELTA. */
+  subagents: SubagentTask[];
+  /** Detiene un subagente (`forwardedProps.stopSubagent`). No toca el run vivo. */
+  stopSubagent: (taskId: string) => Promise<void>;
+  /**
+   * Vuelve a pedir el hilo (POST sin mensaje → snapshot + estado + run vivo). Para cuando la app sabe
+   * por fuera que algo cambió (p. ej. el bus `/me/events` avisa que un subagente terminó).
+   */
+  refresh: () => Promise<void>;
 }
+
+/** A la tercera vez que el servidor rechaza un mensaje en espera, se deja de insistir. */
+const MAX_QUEUE_TRIES = 3;
 
 const uuid = () => {
   const c = (globalThis as { crypto?: Crypto }).crypto;
@@ -118,6 +139,17 @@ function userMessage(text: string, attachments: Attachment[]): RunAgentInput["me
   return { id: uuid(), role: "user", content: parts } as RunAgentInput["messages"][number];
 }
 
+/** El texto y los adjuntos de vuelta desde el `content` de un mensaje AG-UI del usuario. */
+function fromUserMessage(content: unknown): { text: string; attachments: Attachment[] } {
+  if (typeof content === "string") return { text: content, attachments: [] };
+  const parts = Array.isArray(content) ? (content as { type?: string; text?: string; mimeType?: string; filename?: string; source?: { type?: string; value?: string } }[]) : [];
+  const text = parts.filter((p) => p?.type === "text").map((p) => p.text ?? "").join("");
+  const attachments = parts
+    .filter((p) => p && p.type !== "text" && p.source)
+    .map((p) => ({ mimeType: p.mimeType ?? "application/octet-stream", ...(p.filename ? { name: p.filename } : {}), ...(p.source!.type === "url" ? { url: p.source!.value } : { data: p.source!.value }) }));
+  return { text, attachments };
+}
+
 export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions = {}): Pilot {
   const [state, setState] = useState<PilotState>(() => createPilotState(opts.initialTurns ?? []));
   const ref = useRef(state);
@@ -131,6 +163,19 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
   const liveRun = useRef<string | null>(null);
   /** Respuestas a tarjetas que esperan a las demás (un resume debe cubrirlas todas). */
   const answers = useRef(new Map<string, { status: "resolved" | "cancelled"; payload?: unknown }>());
+  /** Cuántas veces se rechazó cada texto en espera (por el id del mensaje con que salió). */
+  const queuedTries = useRef(new Map<string, number>());
+  const flushRef = useRef<() => void>(() => {});
+
+  /** Lo que lleva todo run: hilo, run nuevo y el contexto de la pantalla en este momento. */
+  const baseInput = (): RunAgentInput => {
+    const ctx = optsRef.current.context;
+    return { threadId, runId: uuid(), messages: [], tools: [], context: toAgUiContext(typeof ctx === "function" ? (ctx as () => unknown)() : ctx), state: {}, forwardedProps: extraProps() };
+  };
+  const extraProps = (): Record<string, unknown> => {
+    const f = optsRef.current.forwardedProps;
+    return (typeof f === "function" ? f() : f) ?? {};
+  };
 
   const commit = useCallback((next: PilotState) => {
     if (next === ref.current) return;
@@ -150,20 +195,12 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
     async (partial: Pick<RunAgentInput, "messages"> & Partial<RunAgentInput>, reopening = false): Promise<void> => {
       const t = transportRef.current;
       if (!t) return;
-      const ctx = optsRef.current.context;
-      const input: RunAgentInput = {
-        threadId,
-        runId: uuid(),
-        tools: [],
-        context: toAgUiContext(typeof ctx === "function" ? (ctx as () => unknown)() : ctx),
-        state: {},
-        forwardedProps: {},
-        ...partial,
-      };
+      const input: RunAgentInput = { ...baseInput(), ...partial, forwardedProps: { ...extraProps(), ...partial.forwardedProps } };
       ctrl.current?.abort();
       const c = new AbortController();
       ctrl.current = c;
       const steering = typeof input.forwardedProps?.steer === "string";
+      const userMsg = input.messages[0] as { content?: unknown } | undefined;
       // El run que se puede detener: el que este cliente arrancó (un steer se suma al que ya corre).
       if (!steering && (input.messages.length || input.resume?.length)) liveRun.current = input.runId;
       optsRef.current.onSend?.(input);
@@ -185,9 +222,23 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
       } catch (err) {
         if (c.signal.aborted) return;
         const code = err instanceof PilotHttpError ? err.code : undefined;
-        // Ya hay un run vivo, o aprobaciones sin contestar: se abre el hilo para verlas.
+        // Ya hay un run vivo, o aprobaciones sin contestar: el mensaje queda en espera (sale solo al
+        // terminar ese run, gs-agui 1 §0.7b-6) y se abre el hilo para seguir el run o ver las tarjetas.
         if ((code === "run_active" || code === "interrupt_pending") && !reopening) {
-          commit({ ...ref.current, notice: err instanceof Error ? err.message : null, effects: [] });
+          if (userMsg) {
+            const { text, attachments } = fromUserMessage(userMsg.content);
+            const tries = (queuedTries.current.get(input.messages[0].id) ?? 0) + 1;
+            if (tries < MAX_QUEUE_TRIES) {
+              let s = queueMessage(ref.current, text, attachments, tries);
+              // Si no era un steer, el reloj del turno era de este mensaje: todavía no empieza.
+              if (!steering) s = { ...s, busy: false, turnStartedAt: 0 };
+              commit({ ...s, notice: null });
+            } else {
+              // Ya se intentó varias veces: la burbuja se queda con el error (y «Reintentar»).
+              commit(sendFailed(ref.current, err instanceof Error && err.message ? err.message : "No se pudo mandar el mensaje."));
+              return;
+            }
+          } else commit({ ...ref.current, notice: err instanceof Error ? err.message : null, effects: [] });
           return runNow({ messages: [] }, true);
         }
         // Un steer que no entró no detiene el run: se vuelve a leer el hilo (el snapshot dice si quedó).
@@ -198,7 +249,12 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
         commit(sendFailed(ref.current, err instanceof Error && err.message ? err.message : "No se pudo hablar con el agente."));
         return;
       }
-      if (ended || c.signal.aborted) return;
+      if (c.signal.aborted) return;
+      if (ended) {
+        // Lo que esperaba a que terminara este run sale ahora.
+        if (ref.current.queued.length) setTimeout(() => flushRef.current(), 0);
+        return;
+      }
       // Se cortó a media respuesta (red, deploy): el hilo vive en el servidor, se pide de nuevo.
       if (!reopening) return runNow({ messages: [] }, true);
       commit(sendFailed(ref.current, "Se cortó la conexión con el agente."));
@@ -233,17 +289,43 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
         await runNow({ messages: [userMessage(text, [])], forwardedProps: { steer: live } });
         return;
       }
+      await sendNew(text, attachments);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [commit, runNow],
+  );
+
+  /** Un run nuevo con el mensaje. `tries`: cuántas veces ya se rechazó (mensajes en espera). */
+  const sendNew = useCallback(
+    async (text: string, attachments: Attachment[], tries = 0) => {
       // Mandar un mensaje con tarjetas abiertas las descarta (AG-UI pide cerrarlas en el mismo run).
       const resume = pendingResume();
       answers.current.clear();
       let s = ref.current;
       for (const p of s.permissions) s = resolvePermission(s, p.id, "cancelled");
       commit(beginSend(s, text, attachments));
-      await runNow({ messages: [userMessage(text, attachments)], ...(resume.length ? { resume } : {}) });
+      const msg = userMessage(text, attachments);
+      if (tries) queuedTries.current.set(msg.id, tries);
+      try {
+        await runNow({ messages: [msg], ...(resume.length ? { resume } : {}) });
+      } finally {
+        queuedTries.current.delete(msg.id);
+      }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [commit, runNow],
   );
+
+  // Los mensajes en espera salen juntos, como un run normal, cuando ya no hay run ni tarjetas.
+  flushRef.current = () => {
+    const s = ref.current;
+    if (!s.queued.length || s.busy || s.permissions.length || !transportRef.current) return;
+    const { state: next, queued } = takeQueued(s);
+    commit(next);
+    const text = queued.map((q) => q.text).filter(Boolean).join("\n\n");
+    const attachments = queued.flatMap((q) => q.attachments ?? []);
+    void sendNew(text, attachments, Math.max(...queued.map((q) => q.tries)));
+  };
 
   const stop = useCallback(() => {
     // Dejar de leer NO detiene el run (desconectarse nunca cancela): se pide explícito.
@@ -256,13 +338,13 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
     commit(stopTurn(ref.current));
     const t = transportRef.current;
     if (!t || !run) return;
-    const ctx = optsRef.current.context;
+    const input = baseInput();
     void t
-      .run(
-        { threadId, runId: uuid(), messages: [], tools: [], context: toAgUiContext(typeof ctx === "function" ? (ctx as () => unknown)() : ctx), state: {}, forwardedProps: { cancel: run } },
-        () => {},
-      )
-      .catch(() => {});
+      .run({ ...input, forwardedProps: { ...input.forwardedProps, cancel: run } }, () => {})
+      .catch(() => {})
+      // Lo que esperaba al run detenido sale ya que no hay run.
+      .then(() => flushRef.current());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [commit, threadId]);
 
   const retry = useCallback(() => {
@@ -327,7 +409,25 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
     }
   }, [commit]);
 
-  const canSteer = Boolean(transport) && (opts.steer ?? ((state.agentState.caps as { steer?: unknown } | undefined)?.steer === true));
+  const stopSubagent = useCallback(
+    async (taskId: string) => {
+      const t = transportRef.current;
+      if (!t) return;
+      commit(markSubagent(ref.current, taskId, "stopped"));
+      const input = baseInput();
+      // Un POST aparte: su respuesta (RUN_STARTED → RUN_FINISHED) no es del run vivo y no se reduce.
+      await t.run({ ...input, forwardedProps: { ...input.forwardedProps, stopSubagent: taskId } }, () => {}).catch(() => {});
+      // Con el run vivo, el cambio llega como STATE_DELTA; sin él, el estado fresco viene al reabrir.
+      if (!ref.current.busy) await runNow({ messages: [] }, true);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [commit, runNow],
+  );
 
-  return { state, threadId, send, stop, retry, respondPermission, recordDecision, expirePermission, canSteer, loadOlder, loadingOlder };
+  const refresh = useCallback(() => runNow({ messages: [] }, true), [runNow]);
+
+  const canSteer = Boolean(transport) && (opts.steer ?? ((state.agentState.caps as { steer?: unknown } | undefined)?.steer === true));
+  const subagents = useMemo(() => subagentsOf(state.agentState), [state.agentState]);
+
+  return { state, threadId, send, stop, retry, respondPermission, recordDecision, expirePermission, canSteer, loadOlder, loadingOlder, subagents, stopSubagent, refresh };
 }

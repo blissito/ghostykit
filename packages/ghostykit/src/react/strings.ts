@@ -60,6 +60,14 @@ export interface PilotStrings {
   steps: Record<string, string>;
   loadOlder: string;
   loadingOlder: string;
+  /** Bajo un mensaje que espera a que termine el run vivo. */
+  queued: string;
+  /** «2 agentes trabajando». */
+  subagentsWorking: (n: number) => string;
+  /** Sin ninguno corriendo. */
+  subagentsDone: (n: number) => string;
+  subagentStop: string;
+  subagentStatus: Record<string, string>;
   confirmTitle: string;
   approve: string;
   reject: string;
@@ -136,6 +144,11 @@ export const STRINGS_ES: PilotStrings = {
   steps: { waking: "Despertando al agente…", session: "Preparando la sesión…", compacting: "Resumiendo la conversación…" },
   loadOlder: "Cargar mensajes anteriores",
   loadingOlder: "Cargando…",
+  queued: "Se manda cuando termine",
+  subagentsWorking: (n) => (n === 1 ? "1 agente trabajando" : `${n} agentes trabajando`),
+  subagentsDone: (n) => (n === 1 ? "1 agente terminó" : `${n} agentes terminaron`),
+  subagentStop: "Detener",
+  subagentStatus: { running: "Trabajando", completed: "Terminó", failed: "Falló", stopped: "Detenido" },
   confirmTitle: "Necesito tu permiso para",
   approve: "Aprobar",
   reject: "Rechazar",
@@ -211,6 +224,11 @@ export const STRINGS_EN: PilotStrings = {
   steps: { waking: "Waking the agent…", session: "Starting the session…", compacting: "Compacting the conversation…" },
   loadOlder: "Load earlier messages",
   loadingOlder: "Loading…",
+  queued: "Sends when this finishes",
+  subagentsWorking: (n) => (n === 1 ? "1 agent working" : `${n} agents working`),
+  subagentsDone: (n) => (n === 1 ? "1 agent finished" : `${n} agents finished`),
+  subagentStop: "Stop",
+  subagentStatus: { running: "Working", completed: "Done", failed: "Failed", stopped: "Stopped" },
   confirmTitle: "I need your permission to",
   approve: "Approve",
   reject: "Reject",

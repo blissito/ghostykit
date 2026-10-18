@@ -55,6 +55,33 @@ export interface CustomEntry {
   timestamp?: number;
 }
 
+/** Un subagente del agente (`state.subagents.tasks[]`, gs-agui 1 §0.5). */
+export interface SubagentTask {
+  id: string;
+  title?: string;
+  status: "running" | "completed" | "failed" | "stopped" | (string & {});
+  /** Epoch ms. */
+  startedAt?: number;
+  endedAt?: number;
+  usage?: { tokens?: number; toolUses?: number };
+  /** La última herramienta que usó (para el renglón «Leyendo…»). */
+  lastTool?: string;
+  /** Lo que dijo al terminar. */
+  summary?: string;
+  model?: string;
+  effort?: string;
+  /** Su resultado ya entró al hilo. */
+  delivered?: boolean;
+}
+
+/** Un mensaje que no pudo entrar al run vivo (409 `run_active`): sale solo al terminar el run. */
+export interface QueuedMessage {
+  text: string;
+  attachments?: Attachment[];
+  /** Cuántas veces el servidor lo rechazó (se rinde a la tercera). */
+  tries: number;
+}
+
 /** Hay mensajes más viejos que los del snapshot (`CUSTOM ghosty.history`). */
 export interface HistoryPage {
   hasMoreBefore: boolean;
@@ -138,6 +165,11 @@ export interface PilotState {
   olderCount: number;
   /** El `ghosty.history` que acompaña al snapshot que viene. */
   historyNext?: HistoryPage | null;
+  /** Mensajes en espera de que termine el run vivo (steer rechazado). */
+  queued: QueuedMessage[];
+  /** El `TEXT_MESSAGE` abierto y dónde empieza en el texto del último turno: si el servidor lo
+   *  re-emite (reconexión, §0.7b-4) con el mismo `messageId`, se reescribe en vez de duplicarse. */
+  openText?: { id: string; start: number } | null;
   /** Efectos de la ÚLTIMA transición. El hook los ejecuta y los descarta. */
   effects: PilotEffect[];
 }
