@@ -1,4 +1,4 @@
-// ghosty-autopilot/core — el estado del chat sin React: tipos, reductor puro sobre eventos AG-UI y parsers.
+// ghostykit/core — el estado del chat sin React: tipos, reductor puro sobre eventos AG-UI y parsers.
 export * from "./types";
 export {
   argsDetail,

@@ -1,4 +1,4 @@
-// ghosty-autopilot/transport — el ÚNICO transporte: AG-UI sobre HTTP. Un `POST <url>` con
+// ghostykit/transport — el ÚNICO transporte: AG-UI sobre HTTP. Un `POST <url>` con
 // `RunAgentInput` que contesta SSE de eventos AG-UI (ver docs/protocol.md). Nada más: cancelar es
 // abortar la petición; reconectar es otro POST sin mensaje nuevo (el servidor manda MESSAGES_SNAPSHOT).
 //

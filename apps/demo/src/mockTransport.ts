@@ -1,7 +1,7 @@
 // Un agente de mentira que habla AG-UI de verdad (los mismos eventos que manda un agente LangGraph por
 // su adaptador): texto en vivo, pasos, y una aprobación con `RUN_FINISHED.outcome: interrupt` que se
 // contesta con `resume`. Es el playground: todo lo que se ve aquí es lo que vería una app real.
-import type { BaseEvent, PilotTransport, RunAgentInput } from "ghosty-autopilot";
+import type { BaseEvent, PilotTransport, RunAgentInput } from "ghostykit";
 
 const sleep = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
@@ -119,7 +119,7 @@ export function createMockTransport(): PilotTransport {
       }
 
       await say(
-        `Recibí: «${text.slice(0, 80)}».\n\nEsto es el **playground** de Ghosty Autopilot: el agente es de mentira, pero habla **AG-UI** de verdad. Prueba con *«¿por qué falló el monitor?»* para ver pasos y una tarjeta de aprobación.\n\n\`\`\`ts\nimport { Piloto, createAgUiTransport } from "ghosty-autopilot";\nimport "ghosty-autopilot/styles.css";\n\n<Piloto transport={createAgUiTransport({ url: "/api/agent" })} />\n\`\`\``,
+        `Recibí: «${text.slice(0, 80)}».\n\nEsto es el **playground** de Ghosty Autopilot: el agente es de mentira, pero habla **AG-UI** de verdad. Prueba con *«¿por qué falló el monitor?»* para ver pasos y una tarjeta de aprobación.\n\n\`\`\`ts\nimport { Piloto, createAgUiTransport } from "ghostykit";\nimport "ghostykit/styles.css";\n\n<Piloto transport={createAgUiTransport({ url: "/api/agent" })} />\n\`\`\``,
       );
       e({ type: "RUN_FINISHED", threadId, runId, outcome: { type: "success" } });
     },

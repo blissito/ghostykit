@@ -1,5 +1,5 @@
 {
-  "name": "ghosty-autopilot-monorepo",
+  "name": "ghostykit-monorepo",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -7,9 +7,9 @@
     "apps/*"
   ],
   "scripts": {
-    "build": "npm run build -w ghosty-autopilot",
-    "test": "npm test -w ghosty-autopilot",
-    "typecheck": "npm run typecheck -w ghosty-autopilot",
-    "demo": "npm run build -w ghosty-autopilot && npm run dev -w ghosty-autopilot-demo"
+    "build": "npm run build -w ghostykit",
+    "test": "npm test -w ghostykit",
+    "typecheck": "npm run typecheck -w ghostykit",
+    "demo": "npm run build -w ghostykit && npm run dev -w ghostykit-demo"
   }
 }

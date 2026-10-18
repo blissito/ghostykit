@@ -1,9 +1,9 @@
 // El playground: un panel de crons de mentira a la izquierda (lo que la app ya tiene) y Piloto a la
 // derecha. El panel le pasa `context` (qué pantalla y qué fila ves) y referencias con «@».
 import { useMemo, useRef, useState } from "react";
-import { Piloto, type PilotoHandle, type TurnDoneInfo } from "ghosty-autopilot";
+import { Piloto, type PilotoHandle, type TurnDoneInfo } from "ghostykit";
 import { createMockTransport } from "./mockTransport";
-import { createAgUiTransport } from "ghosty-autopilot";
+import { createAgUiTransport } from "ghostykit";
 
 const CRONS = [
   { name: "purge-files", schedule: "cada 7 días", last: "hace 2 h", status: "ok" },
@@ -66,10 +66,10 @@ export function App() {
       <aside className="panel">
         <header>
           <h1>
-            Ghosty Autopilot <span>ghosty-autopilot</span>
+            Ghosty Autopilot <span>ghostykit</span>
           </h1>
           <p>El piloto de tu app: tú dices a dónde, él maneja. Este panel es «tu app»; el chat de la derecha es Piloto con un transporte simulado. Pídele «¿por qué falló el monitor?».</p>
-          <p><a href="https://github.com/blissito/ghosty-autopilot">github.com/blissito/ghosty-autopilot</a> · <code>npm i ghosty-autopilot</code></p>
+          <p><a href="https://github.com/blissito/ghostykit">github.com/blissito/ghostykit</a> · <code>npm i ghostykit</code></p>
         </header>
         <div className="controls">
           <label>

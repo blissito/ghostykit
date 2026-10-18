@@ -1,6 +1,6 @@
 {
-  "name": "ghosty-autopilot",
-  "version": "0.5.0",
+  "name": "ghostykit",
+  "version": "0.4.0",
   "description": "Ghosty Autopilot \u2014 the autopilot chat for your React app, on AG-UI: works with LangGraph, Mastra, CrewAI or any AG-UI agent. Streaming text, agent steps, human approval cards (interrupt/resume), attachments and voice.",
   "type": "module",
   "main": "./dist/core/index.js",
@@ -91,10 +91,10 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/blissito/ghosty-autopilot.git",
-    "directory": "packages/ghosty-autopilot"
+    "url": "git+https://github.com/blissito/ghostykit.git",
+    "directory": "packages/ghostykit"
   },
-  "homepage": "https://github.com/blissito/ghosty-autopilot#readme",
+  "homepage": "https://github.com/blissito/ghostykit#readme",
   "dependencies": {
     "@ag-ui/core": "^1.0.3"
   }

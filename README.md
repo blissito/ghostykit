@@ -1,9 +1,9 @@
-# Ghosty Autopilot · `ghosty-autopilot`
+# Ghosty Autopilot · `ghostykit`
 
 **An autopilot for your React app, not a copilot or kit.** You don't drive: you say where you're going and
 the agent flies the app for you, stopping only to ask before anything risky. Ghosty Autopilot is the agent chat from
 [Ghosty Studio](https://www.ghosty.studio) (`/c`), packaged as a library: same components, same
-markup, same look ([side by side](https://raw.githubusercontent.com/blissito/ghosty-autopilot/main/docs/screenshots/parity/desktop-done-gs-vs-ghosty-autopilot.png)). You drop it into an app you already
+markup, same look ([side by side](https://raw.githubusercontent.com/blissito/ghostykit/main/docs/screenshots/parity/desktop-done-gs-vs-ghostykit.png)). You drop it into an app you already
 have. It sees what the user has on screen, streams what the agent says and does, and **stops to ask
 before anything risky** (human in the loop).
 
@@ -13,9 +13,9 @@ between.
 
 > El piloto de tu app, no el copiloto: tú no manejas, vas de pasajero y le dices a dónde ir. Es el chat de Ghosty, probado en producción, como biblioteca. Español por default, inglés incluido.
 
-**[Open the playground →](https://blissito.github.io/ghosty-autopilot/)** (a fake backend, a real chat)
+**[Open the playground →](https://blissito.github.io/ghostykit/)** (a fake backend, a real chat)
 
-![The permission pass: the agent asks before running a cron](https://raw.githubusercontent.com/blissito/ghosty-autopilot/main/docs/screenshots/ghosty-light-desktop-2-permission.png)
+![The permission pass: the agent asks before running a cron](https://raw.githubusercontent.com/blissito/ghostykit/main/docs/screenshots/ghosty-light-desktop-2-permission.png)
 
 ## What you get
 
@@ -34,12 +34,12 @@ between.
 ## 30-second quickstart
 
 ```bash
-npm i ghosty-autopilot motion streamdown
+npm i ghostykit motion streamdown
 ```
 
 ```tsx
-import { Piloto, createAgUiTransport } from "ghosty-autopilot";
-import "ghosty-autopilot/styles.css";
+import { Piloto, createAgUiTransport } from "ghostykit";
+import "ghostykit/styles.css";
 
 const transport = createAgUiTransport({ url: "/api/agent" }); // any AG-UI endpoint
 
@@ -118,7 +118,7 @@ your own layout.
 
 ### Skins and theming
 
-`ghosty-autopilot/styles.css` is self-contained and scoped under `.piloto`. It works the same with
+`ghostykit/styles.css` is self-contained and scoped under `.piloto`. It works the same with
 **Tailwind 3, Tailwind 4 or no Tailwind**, and it shields its fields from the host's CSS (verified
 in a Tailwind 3 app **with `@tailwindcss/forms`**: Piloto's textarea gets no border or focus ring, and
 the app's own utilities compute identically with and without Piloto's CSS). Sizes don't depend on
@@ -139,7 +139,7 @@ like ghosty.studio; 16 px in the others). Every color, radius, border width and 
 
 | Ghosty | EasyBits | Neutral |
 |---|---|---|
-| ![Ghosty skin](https://raw.githubusercontent.com/blissito/ghosty-autopilot/main/docs/screenshots/ghosty-light-mobile-2-permission.png) | ![EasyBits skin, dark](https://raw.githubusercontent.com/blissito/ghosty-autopilot/main/docs/screenshots/easybits-dark-mobile-2-permission.png) | ![Neutral skin](https://raw.githubusercontent.com/blissito/ghosty-autopilot/main/docs/screenshots/neutral-light-mobile-2-permission.png) |
+| ![Ghosty skin](https://raw.githubusercontent.com/blissito/ghostykit/main/docs/screenshots/ghosty-light-mobile-2-permission.png) | ![EasyBits skin, dark](https://raw.githubusercontent.com/blissito/ghostykit/main/docs/screenshots/easybits-dark-mobile-2-permission.png) | ![Neutral skin](https://raw.githubusercontent.com/blissito/ghostykit/main/docs/screenshots/neutral-light-mobile-2-permission.png) |
 
 ## Accessibility
 
@@ -150,7 +150,7 @@ like ghosty.studio; 16 px in the others). Every color, radius, border width and 
 
 ## The repo
 
-- `packages/ghosty-autopilot`: the package (`core`, `transport`, `react`, `pointer`, `styles.css`, `fonts.css`)
+- `packages/ghostykit`: the package (`core`, `transport`, `react`, `pointer`, `styles.css`, `fonts.css`)
 - `apps/demo`: the playground (Vite, simulated transport, skin switcher)
 
 ```bash
