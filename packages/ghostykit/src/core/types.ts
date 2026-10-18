@@ -20,7 +20,8 @@ export interface ToolEntry {
   /** El nombre de la herramienta (`toolCallName`): es la llave de los verbos de la app. */
   title?: string;
   kind?: string;
-  /** `in_progress` mientras corre; `completed` | `failed` con su resultado; `pending` = espera aprobación. */
+  /** `in_progress` mientras corre; `completed` | `failed` con su resultado; `pending` = espera
+   *  aprobación; `cancelled` = el run se detuvo antes de que terminara. */
   status?: string;
   path?: string;
   /** Los argumentos, en corto («job: purge-notifications»). */
@@ -77,8 +78,14 @@ export interface PermissionRequest {
   toolCallId?: string;
   reason?: string;
   options: PermissionOption[];
-  /** Hasta cuándo se puede contestar (ISO). */
+  /** Hasta cuándo se puede contestar (ISO, reloj del SERVIDOR). */
   expiresAt?: string | number;
+  /**
+   * El mismo vencimiento en el reloj de ESTE navegador (epoch ms): `expiresAt` menos la hora del
+   * servidor al mandar el evento, más la hora local al recibirlo. Así un reloj local desfasado no
+   * adelanta ni atrasa la cuenta regresiva.
+   */
+  deadline?: number;
 }
 
 /** Lo que una transición pide hacer FUERA del estado (avisos a la app). */

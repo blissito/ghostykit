@@ -4,7 +4,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { beginSend, createPilotState, messagesToTurns, reduceAgUiEvent, resolvePermission, splitNarration, type PilotState } from "../src/core";
+import { beginSend, createPilotState, messagesToTurns, reduceAgUiEvent, resolvePermission, splitNarration, stepLabel, stopTurn, type PilotState } from "../src/core";
 import { PilotHttpError, createAgUiTransport, readSse } from "../src/transport";
 
 const fixture = (name: string) => readFileSync(join(__dirname, "fixtures", name), "utf8");
@@ -219,5 +219,48 @@ describe("un run sobrevive a su cliente y se detiene sólo explícito", () => {
     expect(s.turns[1].text).toContain("Reviso tus crons.");
     s = replay(s, "agui-cancel.sse");
     expect(s.busy).toBe(false);
+  });
+});
+
+describe("0.4.1", () => {
+  it("al detener (cancelled o local), los pasos abiertos dejan de decir «…ando»", () => {
+    const verbs = { get_cron_runs: { one: "Leí el historial", many: "Leí %n historiales", running: "Leyendo corridas…" } };
+    let s = beginSend(createPilotState(), "hola", [], 1);
+    s = reduceAgUiEvent(s, { type: "RUN_STARTED", threadId: "t", runId: "r" });
+    s = reduceAgUiEvent(s, { type: "TOOL_CALL_START", toolCallId: "a", toolCallName: "get_cron_runs" });
+    expect(stepLabel(s.turns[1].tools![0], verbs)).toBe("Leyendo corridas…");
+    const viaServer = reduceAgUiEvent(s, { type: "RUN_FINISHED", threadId: "t", runId: "r", outcome: { type: "cancelled" } });
+    expect(viaServer.turns[1].tools![0].status).toBe("cancelled");
+    expect(stepLabel(viaServer.turns[1].tools![0], verbs)).toBe("Leí el historial");
+    expect(stopTurn(s).turns[1].tools![0].status).toBe("cancelled");
+  });
+
+  it("la cuenta regresiva usa el reloj del SERVIDOR (timestamp del evento), no el local", () => {
+    const serverNow = Date.parse("2026-10-18T12:00:00Z");
+    const localNow = serverNow - 7 * 60_000; // este navegador va 7 min atrasado
+    let s = beginSend(createPilotState(), "hola", [], localNow);
+    s = reduceAgUiEvent(
+      s,
+      {
+        type: "RUN_FINISHED",
+        threadId: "t",
+        runId: "r",
+        timestamp: serverNow,
+        outcome: { type: "interrupt", interrupts: [{ id: "i", reason: "confirmation", expiresAt: new Date(serverNow + 15 * 60_000).toISOString() }] },
+      },
+      localNow,
+    );
+    // Quedan 15 min en el reloj local, no 22.
+    expect(s.permissions[0].deadline! - localNow).toBe(15 * 60_000);
+  });
+
+  it("el transporte pone el `Date` del servidor como timestamp a los eventos que no lo traen", async () => {
+    const t = createAgUiTransport({
+      url: "/agent",
+      fetch: (async () => new Response('data: {"type":"RUN_STARTED","threadId":"t","runId":"r"}\n\n', { headers: { "content-type": "text/event-stream", date: new Date(Date.now() + 3_600_000).toUTCString() } })) as unknown as typeof fetch,
+    });
+    let ts = 0;
+    await t.run({ threadId: "t", runId: "r", messages: [], tools: [], context: [] }, (e) => void (ts = e.timestamp ?? 0));
+    expect(ts - Date.now()).toBeGreaterThan(3_590_000);
   });
 });

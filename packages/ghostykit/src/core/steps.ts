@@ -15,7 +15,7 @@ export interface ToolVerb {
 export type ToolVerbs = Record<string, ToolVerb>;
 
 /** ¿Sigue corriendo? `pending` también: es el instante entre pedirla y arrancarla. */
-export const isRunning = (t: ToolEntry) => t.status !== "completed" && t.status !== "failed";
+export const isRunning = (t: ToolEntry) => t.status !== "completed" && t.status !== "failed" && t.status !== "cancelled";
 
 /**
  * Los nombres con los que se puede buscar el verbo/ícono de una herramienta, del más específico al

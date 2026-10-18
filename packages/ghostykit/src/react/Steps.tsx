@@ -12,6 +12,7 @@ import {
   Check,
   ChevronRight,
   CircleCheck,
+  CircleSlash,
   CircleX,
   Clock,
   FilePenLine,
@@ -180,6 +181,9 @@ function StepLine({ tool, times, live }: { tool: ToolEntry; times: number; live:
       <span className="flex h-5 w-5 shrink-0 items-center justify-center" aria-label={spins ? t.running : tool.status === "failed" ? t.failed : t.done}>
         {spins ? (
           <Loader2 className="h-4 w-4 animate-spin text-text-info" />
+        ) : tool.status === "cancelled" ? (
+          // El run se detuvo antes de que terminara.
+          <CircleSlash className="h-4 w-4 text-text-tertiary" />
         ) : tool.status === "pending" ? (
           // Espera aprobación (el run se detuvo en un interrupt): ni gira ni está lista.
           <Clock className="h-4 w-4 text-text-tertiary" />
@@ -204,6 +208,7 @@ const STATUS: Record<string, { Icon: PilotIcon; className: string; key: "step" |
   pending: { Icon: Clock, className: "text-text-tertiary", key: "step" },
   in_progress: { Icon: Loader2, className: "animate-spin text-text-info", key: "running" },
   completed: { Icon: CircleCheck, className: "text-text-success", key: "done" },
+  cancelled: { Icon: CircleSlash, className: "text-text-tertiary", key: "step" },
   failed: { Icon: CircleX, className: "text-text-danger", key: "failed" },
 };
 

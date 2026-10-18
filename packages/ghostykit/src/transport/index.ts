@@ -115,10 +115,17 @@ export function createAgUiTransport(opts: AgUiTransportOptions): PilotTransport 
           throw new PilotHttpError(json?.message ?? json?.error ?? `Error ${res.status}`, res.status, json?.error, retryAfter);
         }
         if (!res.body) return;
+        // La hora del servidor (header `Date`; en otro origen hace falta `Access-Control-Expose-Headers:
+        // Date`): a los eventos que no traen `timestamp` se les pone la del servidor, para que la cuenta
+        // regresiva de una aprobación no dependa del reloj de este navegador.
+        const serverDate = Date.parse(res.headers.get("date") ?? "");
+        const skew = Number.isNaN(serverDate) ? null : serverDate - Date.now();
         await readSse(res.body, ({ data }) => {
           if (!data) return;
           try {
-            onEvent(JSON.parse(data) as BaseEvent);
+            const event = JSON.parse(data) as BaseEvent;
+            if (skew !== null && typeof event.timestamp !== "number") event.timestamp = Date.now() + skew;
+            onEvent(event);
           } catch {
             // Un evento que no es JSON no es AG-UI: se ignora.
           }

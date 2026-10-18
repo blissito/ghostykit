@@ -56,7 +56,8 @@ export function ConfirmCard({
   const { strings: t } = usePiloto();
   const [pending, setPending] = useState<string | null>(null);
   const [stamp, setStamp] = useState<Stamp | null>(null);
-  const time = useRemaining(request.expiresAt);
+  // `deadline` ya está en el reloj de este navegador (ver `toPermission`).
+  const time = useRemaining(request.deadline ?? request.expiresAt);
   const expired = time !== null && time.left <= 0;
   const urgent = time !== null && !expired && time.left < 60_000;
 

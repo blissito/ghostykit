@@ -133,7 +133,15 @@ yes. This uses AG-UI's **interrupts**: the run stops and ends with `outcome.type
 ```
 
 The approval card shows `message` as the title, the tool (`metadata.tool`, or the name from
-`toolCallId`'s `TOOL_CALL_START`) and a countdown to `expiresAt`. Then:
+`toolCallId`'s `TOOL_CALL_START`) and a countdown to `expiresAt`.
+
+**Clocks.** The user's clock may be off by minutes, so the countdown is computed with the
+**server's** time, never the browser's: send `timestamp` (epoch ms, the AG-UI base field) on that
+`RUN_FINISHED`. Without it, the client uses the response's `Date` header (cross-origin, add
+`Access-Control-Expose-Headers: Date`). Either way the card shows `expiresAt − server time`
+remaining, counted locally from when the event arrived.
+
+Then:
 
 - **Approve** posts a new run on the **same `threadId`** with a new `runId`, `messages: []` and:
   ```json

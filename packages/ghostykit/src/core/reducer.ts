@@ -58,7 +58,7 @@ const APPROVE: PermissionOption = { optionId: "approve", name: "Aprobar", kind: 
 const REJECT: PermissionOption = { optionId: "reject", name: "Rechazar", kind: "reject_once" };
 
 /** Un `Interrupt` de AG-UI como tarjeta: título, herramienta (por su toolCallId) y vencimiento. */
-export function toPermission(i: Interrupt, turns: Turn[]): PermissionRequest {
+export function toPermission(i: Interrupt, turns: Turn[], clockOffset = 0): PermissionRequest {
   const meta = (i.metadata ?? {}) as Record<string, unknown>;
   const toolName =
     (typeof meta.tool === "string" ? meta.tool : undefined) ??
@@ -70,8 +70,15 @@ export function toPermission(i: Interrupt, turns: Turn[]): PermissionRequest {
     ...(i.toolCallId ? { toolCallId: i.toolCallId } : {}),
     reason: i.reason,
     options: [REJECT, APPROVE],
-    ...(i.expiresAt ? { expiresAt: i.expiresAt } : {}),
+    ...(i.expiresAt ? { expiresAt: i.expiresAt, deadline: expiryMs(i.expiresAt) + clockOffset } : {}),
   };
+}
+
+/** Los pasos que seguían abiertos cuando el run se cortó: ya no corren (ni giran ni dicen «…ando»). */
+function closeOpenTools(turns: Turn[], status: "cancelled" | "failed"): Turn[] {
+  return turns.map((t) =>
+    t.tools?.some((x) => x.status === "in_progress") ? { ...t, tools: t.tools.map((x) => (x.status === "in_progress" ? { ...x, status } : x)) } : t,
+  );
 }
 
 function textOf(content: unknown): string {
@@ -210,7 +217,11 @@ function finish(s0: PilotState, e: Ev, now: number, failed = false): PilotState 
   const outcome = e.outcome as { type?: string; interrupts?: Interrupt[] } | undefined;
   const interrupted = outcome?.type === "interrupt" && Array.isArray(outcome.interrupts) && outcome.interrupts.length > 0;
   // Las tarjetas abiertas son las del último run: si terminó bien o se canceló, ya no hay.
-  s.permissions = interrupted ? outcome!.interrupts!.map((i) => toPermission(i, s.turns)) : [];
+  // El reloj del servidor (`timestamp` del evento, o el que puso el transporte con el `Date` de la
+  // respuesta) contra el local al recibirlo: la cuenta regresiva no depende del reloj de la persona.
+  const clockOffset = typeof e.timestamp === "number" ? now - e.timestamp : 0;
+  s.permissions = interrupted ? outcome!.interrupts!.map((i) => toPermission(i, s.turns, clockOffset)) : [];
+  if (outcome?.type === "cancelled" || failed) s = { ...s, turns: closeOpenTools(s.turns, failed ? "failed" : "cancelled") };
   if (interrupted) {
     // La herramienta que espera aprobación no está corriendo: espera.
     const waiting = new Set(s.permissions.map((p) => p.toolCallId).filter(Boolean));
@@ -259,7 +270,7 @@ export function sendFailed(prev: PilotState, message: string): PilotState {
 
 /** Detener: el cliente cortó la conexión (el servidor corta el run). */
 export function stopTurn(prev: PilotState): PilotState {
-  return { ...prev, busy: false, turnStartedAt: 0, effects: [] };
+  return { ...prev, busy: false, turnStartedAt: 0, turns: closeOpenTools(prev.turns, "cancelled"), effects: [] };
 }
 
 /** Quita el último intercambio (las respuestas del final y el último mensaje del usuario). */
