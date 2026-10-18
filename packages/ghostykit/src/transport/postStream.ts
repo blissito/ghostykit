@@ -211,6 +211,8 @@ export function createPostStreamTransport(
   return {
     // Sin steer: con un turno corriendo el servidor contesta 409. El composer no deja mandar.
     steer: false,
+    // Cada turno trae su stream: no hay «conectando» que enseñar.
+    stream: "per-turn",
 
     subscribe(l, sub: SubscribeOptions = {}) {
       listener = l;

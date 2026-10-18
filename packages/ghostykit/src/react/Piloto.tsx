@@ -7,6 +7,7 @@
  * la respuesta crece debajo sin mover nada (un espaciador encoge lo que ella crece). Cuando ya no
  * cabe, el chat la sigue… salvo que subas: ahí se suelta hasta que vuelvas al final.
  */
+import { AnimatePresence } from "motion/react";
 import { ArrowDown } from "lucide-react";
 import {
   forwardRef,
@@ -29,6 +30,7 @@ import { ReferenceChips, Suggestions } from "./Chips";
 import { Composer, type UploadResult } from "./Composer";
 import { ConfirmCard } from "./ConfirmCard";
 import { PilotoContext, rootProps, type MarkdownOptions, type PilotIcon, type PilotoConfig, type PilotTheme } from "./context";
+import { initialGate, stepGate } from "./connectingGate";
 import { ConnectingState, TypingDots, WaitLabel } from "./Status";
 import { STRINGS_EN, STRINGS_ES, type PilotStrings } from "./strings";
 import { usePilot, type PermissionHandler, type Pilot, type UsePilotOptions } from "./usePilot";
@@ -309,16 +311,26 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
   const pageInProgress = last?.role === "assistant" && (Boolean(last.planning) || (last.pages ?? []).some((p) => !p.error && (!p.readyAt || p.review?.status === "running")));
   const toolRunning = busy && last?.role === "assistant" && ((last.tools ?? []).some(isRunning) || pageInProgress);
   const empty = turns.length === 0 && !busy;
-  const placeholder = !connected ? t.placeholderConnecting : (props.placeholder ?? (props.agentName ? t.placeholder(props.agentName) : t.placeholderDefault));
+  // Un transporte sin stream vivo (POST por turno) está listo desde el inicio.
+  const perTurn = !external && transport?.stream === "per-turn";
+  const ready = connected || perTurn;
+  const placeholder = !ready ? t.placeholderConnecting : (props.placeholder ?? (props.agentName ? t.placeholder(props.agentName) : t.placeholderDefault));
   const showFiles = features.attachments ?? Boolean(props.upload);
 
-  // El estado de conexión sólo si tarda: una conexión rápida no debe parpadear.
-  const [slowConnect, setSlowConnect] = useState(false);
+  // «Conectando» sólo si de verdad tarda, y si sale, se queda un mínimo (ver `connectingGate.ts`).
+  const gateRef = useRef(initialGate(Date.now(), ready));
+  const [showConnecting, setShowConnecting] = useState(false);
   useEffect(() => {
-    if (connected) return setSlowConnect(false);
-    const id = setTimeout(() => setSlowConnect(true), 800);
+    let id: ReturnType<typeof setTimeout> | undefined;
+    const tick = () => {
+      const r = stepGate(gateRef.current, ready, Date.now());
+      gateRef.current = r.gate;
+      setShowConnecting(r.visible);
+      if (r.recheckAt !== null) id = setTimeout(tick, Math.max(0, r.recheckAt - Date.now()));
+    };
+    tick();
     return () => clearTimeout(id);
-  }, [connected]);
+  }, [ready]);
 
   // Lo señalado (referencias con `prompt`) va ARRIBA de la caja, como el chip de «Señalar» de Ghosty;
   // las tarjetas del tablero, dentro.
@@ -366,10 +378,13 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
           // empezar. Si no cabe (panel bajo), se desplaza: `safe center` nunca empuja nada fuera.
           <div className="gs-scroll flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-4 pb-[10vh] [justify-content:safe_center]">
             {slots.headerActions && <div className="absolute right-4 top-3 flex gap-2">{slots.headerActions}</div>}
-            {!connected && slowConnect ? (
-              <ConnectingState phase={phase} error={error} avatar={props.avatar} />
+            {/* Sale con su fundido (exit de ConnectingState) antes de que entre el saludo. */}
+            <AnimatePresence mode="wait" initial={false}>
+            {showConnecting ? (
+              <ConnectingState key="connecting" phase={phase} error={error} avatar={props.avatar} />
             ) : (
-              (slots.emptyState ?? (
+              <div key="welcome">
+              {slots.emptyState ?? (
                 <div className="mb-6 flex flex-col items-center">
                   {props.avatar && <div className="mb-3">{props.avatar}</div>}
                   {props.welcome && (
@@ -385,8 +400,10 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
                     </h1>
                   )}
                 </div>
-              ))
+              )}
+              </div>
             )}
+            </AnimatePresence>
             <div className="w-full max-w-3xl">
               {slots.aboveComposer}
               {composer}

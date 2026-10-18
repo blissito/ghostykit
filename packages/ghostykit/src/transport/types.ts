@@ -26,6 +26,11 @@ export interface PilotTransport {
   setModel?(value: string): Promise<void>;
   /** Contesta un pedido de permiso. `resolved: false` = ya no estaba abierto (se agotó el plazo). */
   respondPermission?(id: string, optionId: string): Promise<{ resolved: boolean }>;
+  /**
+   * `"per-turn"`: no hay un stream vivo que esperar (cada turno trae el suyo, como el POST de
+   * EasyBits). Piloto pinta el hilo al instante y nunca enseña «conectando». Default `"live"`.
+   */
+  stream?: "live" | "per-turn";
   /** El hilo guardado, para pintarlo al montar (si la app no pasa `initialTurns`). */
   history?(): Promise<Turn[] | PilotHistory>;
   /**
