@@ -189,10 +189,10 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
       addReference: (r) => {
         const current = refsRef.current;
         if (!current.some((x) => x.id === r.id)) setRefs([...current, r]);
-        requestAnimationFrame(() => composerBox.current?.querySelector("textarea")?.focus());
+        requestAnimationFrame(() => composerBox.current?.querySelector("textarea")?.focus({ preventScroll: true }));
       },
       setDraft: (text) => setDraftState((d) => ({ text, n: d.n + 1 })),
-      focus: () => composerBox.current?.querySelector("textarea")?.focus(),
+      focus: () => composerBox.current?.querySelector("textarea")?.focus({ preventScroll: true }),
     }),
     [send, setRefs],
   );

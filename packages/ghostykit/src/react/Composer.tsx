@@ -136,7 +136,8 @@ export function Composer({
     const id = requestAnimationFrame(() => {
       const el = ref.current;
       if (!el) return;
-      el.focus();
+      // Sin desplazar la página: en un panel lateral, enfocar movía la app anfitriona (EasyBits).
+      el.focus({ preventScroll: true });
       // Con texto inicial (una sugerencia a medias) el cursor va al FINAL.
       el.setSelectionRange(el.value.length, el.value.length);
     });
@@ -195,7 +196,7 @@ export function Composer({
         return next;
       });
       setNotice(rejected.length ? rejected.join(" · ") : null);
-      ref.current?.focus();
+      ref.current?.focus({ preventScroll: true });
     },
     [busy, canSeeImages, upload, maxFiles, maxFileMb, t],
   );

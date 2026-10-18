@@ -1,7 +1,7 @@
 {
   "name": "ghostykit",
-  "version": "0.3.1",
-  "description": "Piloto UI \u2014 the in-app copilot chat from Ghosty Studio: streaming, agent steps, attachments, voice, reconnection and human approval cards. Pure event reducer + SSE transport + React components.",
+  "version": "0.3.2",
+  "description": "Piloto UI — the in-app copilot chat from Ghosty Studio: streaming, agent steps, attachments, voice, reconnection and human approval cards. Pure event reducer + SSE transport + React components.",
   "type": "module",
   "main": "./dist/core/index.js",
   "types": "./dist/core/index.d.ts",
@@ -62,6 +62,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "esbuild": "^0.25.0",
+    "jsdom": "^26.1.0",
     "lucide-react": "^1.44.0",
     "motion": "^12.38.0",
     "postcss": "^8.5.0",
