@@ -1,23 +1,24 @@
-// Lo que se ve mientras el agente todavía no contesta: los puntos con la frase de espera, y el
-// estado de conexión con sus tres pasos reales.
+// Lo que se ve mientras el agente todavía no contesta. PORTADO de Ghosty Studio (`WaitLabel` y los
+// puntitos `gc-typing` de `ChatView.tsx`, y `ConnectingState.tsx`) con el mismo markup; los textos
+// salen de `strings` y la cara del agente, de `avatar`.
 import { AnimatePresence, motion } from "motion/react";
 import { Check } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { formatDuration } from "../core/text";
 import type { ConnectPhase } from "../core/types";
 import { usePiloto } from "./context";
 
 /** Segundos en «despertando» tras los que se da el turno por perdido. */
 const WAKING_GIVEUP_S = 45;
-/** Pasado esto, la frase ya no es «estoy leyendo»: el agente lleva rato trabajando. */
+/** Pasado esto, la frase propia ya no es honesta: el agente lleva rato trabajando. */
 const STILL_WORKING_S = 90;
 
-/** Los tres puntos de «escribiendo». Color y animación por CSS (`.piloto-typing`). */
+/** Los tres puntitos de «escribiendo» (color y animación en CSS: `gc-typing`). */
 export function TypingDots() {
   return (
-    <div className="piloto-typing" aria-hidden>
+    <div className="gc-typing flex gap-1">
       {[0, 1, 2].map((i) => (
-        <span key={i} className="piloto-typing-dot" />
+        <span key={i} className="gc-typing-dot h-2 w-2 animate-bounce rounded-full" style={{ "--i": i } as CSSProperties} />
       ))}
     </div>
   );
@@ -50,8 +51,7 @@ export function WaitLabel({
     phase !== "session"
       ? t.waitPhase[phase]
       : phrases?.length
-        ? // Frases propias de la app (el widget de un cliente): rotan cada 4 s.
-          elsewhere || seconds >= STILL_WORKING_S
+        ? elsewhere || seconds >= STILL_WORKING_S
           ? t.stillWorking
           : phrases[Math.floor(seconds / 4) % phrases.length]
         : elsewhere
@@ -59,7 +59,7 @@ export function WaitLabel({
           : t.howItGoes(seconds);
   const lost = phase === "waking" && seconds >= WAKING_GIVEUP_S;
   return (
-    <div className="piloto-wait flex flex-col gap-0.5 text-sm text-text-secondary">
+    <div className="flex flex-col gap-0.5 text-sm text-text-secondary">
       {lost ? (
         <p className="text-text-primary">
           {t.cantStart}{" "}
@@ -68,14 +68,21 @@ export function WaitLabel({
           </button>
         </p>
       ) : (
-        // La frase cambia con fundido (sale y entra): de golpe se leía brusco.
+        // La frase cambia con fundido (sale y entra), como en claude.ai.
         <p className="flex items-center">
           <AnimatePresence mode="wait" initial={false}>
-            <motion.span key={what} className="piloto-wait-text" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3, ease: "easeInOut" }}>
+            <motion.span
+              className="gc-wait-text"
+              key={what}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3, ease: "easeInOut" }}
+            >
               {what}
             </motion.span>
           </AnimatePresence>
-          {showDuration && <span className="piloto-wait-time">{formatDuration(seconds)}</span>}
+          {showDuration && <span className="tabular-nums text-text-tertiary">&nbsp;· {formatDuration(seconds)}</span>}
         </p>
       )}
     </div>
@@ -89,7 +96,13 @@ export function ConnectingState({ phase, error, avatar, onRetry }: { phase: Conn
   const { strings: t } = usePiloto();
   const current = PHASES.indexOf(phase);
   return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="piloto-connecting flex min-h-[40vh] flex-col items-center justify-center gap-8 text-center">
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      transition={{ duration: 0.3 }}
+      className="flex min-h-[50vh] flex-col items-center justify-center gap-8 text-center"
+    >
       <div className="relative flex h-20 w-20 items-center justify-center">
         {!error &&
           [0, 1].map((i) => (
@@ -106,7 +119,7 @@ export function ConnectingState({ phase, error, avatar, onRetry }: { phase: Conn
           animate={error ? { scale: 1, filter: "grayscale(1)" } : { scale: [1, 1.06, 1] }}
           transition={error ? { duration: 0.3 } : { duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
         >
-          {avatar ?? <span className="piloto-avatar-default" />}
+          {avatar ?? <span className="h-12 w-12 rounded-full bg-brand-500" />}
         </motion.div>
       </div>
       <ol className="flex flex-col gap-3 text-left">
@@ -117,22 +130,37 @@ export function ConnectingState({ phase, error, avatar, onRetry }: { phase: Conn
           return (
             <li key={i} className="flex items-center gap-3">
               <span className="flex h-5 w-5 shrink-0 items-center justify-center">
-                {done ? (
-                  <span className="piloto-pop flex h-5 w-5 items-center justify-center rounded-full bg-background-success">
-                    <Check className="h-3 w-3 text-text-inverse" strokeWidth={3} />
-                  </span>
-                ) : active ? (
-                  <span className="piloto-pulse h-2.5 w-2.5 rounded-full bg-text-primary" />
-                ) : failed ? (
-                  <span className="h-2.5 w-2.5 rounded-full bg-text-danger" />
-                ) : (
-                  <span className="h-2 w-2 rounded-full bg-border-primary" />
-                )}
+                <AnimatePresence mode="wait" initial={false}>
+                  {done ? (
+                    <motion.span key="done" initial={{ scale: 0 }} animate={{ scale: 1 }} className="flex h-5 w-5 items-center justify-center rounded-full bg-background-success">
+                      <Check className="h-3 w-3 text-text-success" strokeWidth={3} />
+                    </motion.span>
+                  ) : active ? (
+                    <motion.span
+                      key="active"
+                      className="h-2.5 w-2.5 rounded-full bg-text-primary"
+                      animate={{ scale: [1, 1.5, 1], opacity: [1, 0.5, 1] }}
+                      transition={{ duration: 1.1, repeat: Infinity, ease: "easeInOut" }}
+                    />
+                  ) : failed ? (
+                    <span key="failed" className="h-2.5 w-2.5 rounded-full bg-text-danger" />
+                  ) : (
+                    <span key="idle" className="h-2 w-2 rounded-full bg-border-primary" />
+                  )}
+                </AnimatePresence>
               </span>
               <div className="leading-tight">
                 <p className={`text-sm ${active || failed ? "text-text-primary" : done ? "text-text-secondary" : "text-text-tertiary"}`}>
                   {step.label}
-                  {active && <span className="piloto-ellipsis inline-block w-4 text-left">…</span>}
+                  {active && (
+                    <motion.span
+                      className="inline-block w-4 text-left"
+                      animate={{ opacity: [0, 1, 1, 0] }}
+                      transition={{ duration: 1.4, repeat: Infinity, times: [0, 0.2, 0.8, 1] }}
+                    >
+                      …
+                    </motion.span>
+                  )}
                 </p>
                 {active && <p className="text-xs text-text-tertiary">{step.hint}</p>}
               </div>
@@ -141,14 +169,14 @@ export function ConnectingState({ phase, error, avatar, onRetry }: { phase: Conn
         })}
       </ol>
       {error && (
-        <div className="flex max-w-md flex-col items-center gap-3">
+        <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="flex max-w-md flex-col items-center gap-3">
           <p className="text-sm text-text-danger">{error}</p>
           {onRetry && (
             <button type="button" onClick={onRetry} className="rounded-full border border-border-primary px-4 py-1.5 text-sm text-text-primary hover:bg-background-secondary">
               {t.connectRetry}
             </button>
           )}
-        </div>
+        </motion.div>
       )}
     </motion.div>
   );

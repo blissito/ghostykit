@@ -47,9 +47,27 @@ const scope = {
   },
 };
 
+/**
+ * `rem` → `var(--piloto-rem)`. Ghosty Studio corre con `html { font-size: 18px }`, así que sus
+ * medidas en rem valen 18 px; la app anfitriona tiene la suya (16 px casi siempre). Con esto Piloto
+ * mide lo mismo en cualquier app, y cada piel elige su unidad (ghosty 18 px, easybits 16 px).
+ */
+const remToVar = async (css) =>
+  (
+    await postcss([
+      {
+        postcssPlugin: "piloto-rem",
+        // Sólo en VALORES: un `@media (width >= 40rem)` no admite `var()` y se queda en rem.
+        Declaration(decl) {
+          if (/rem\b/.test(decl.value)) decl.value = decl.value.replace(/(-?\d*\.?\d+)rem\b/g, (_m, n) => `calc(${n} * var(--piloto-rem))`);
+        },
+      },
+    ]).process(css, { from: undefined })
+  ).css;
+
 const tw = readFileSync(tmp, "utf8");
-const scoped = (await postcss([scope]).process(tw, { from: tmp })).css;
-const base = readFileSync(join(pkg, "src/styles/base.css"), "utf8");
+const scoped = await remToVar((await postcss([scope]).process(tw, { from: tmp })).css);
+const base = await remToVar(readFileSync(join(pkg, "src/styles/base.css"), "utf8"));
 const banner = "/* ghostykit — Piloto UI · MIT · https://github.com/blissito/ghostykit */\n";
 // La piel va DESPUÉS: a igual especificidad, sus piezas con nombre ganan a las utilidades.
 writeFileSync(join(pkg, "dist/styles.css"), `${banner}/* ── Utilidades (Tailwind v4, encerradas en .piloto) ── */\n${scoped}\n/* ── La piel ── */\n${base}`);

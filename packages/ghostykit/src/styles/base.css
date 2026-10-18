@@ -1,141 +1,140 @@
 /* ─────────────────────────────────────────────────────────────────────────────
    Piloto UI — la piel.
 
-   La idea: el agente es tu copiloto, y la cabina tiene su vocabulario. Tinta
-   sobre papel, contornos gruesos y sombras duras (nada de difuminados ni
-   degradados). Todo lo demás calla para que hable UNA pieza: el pase de
-   permiso, con su mecha que se consume y el sello que cae al contestar.
+   El chat es el de Ghosty Studio (`/c`): mismas piezas, mismas clases, mismos
+   valores. Aquí viven (1) las variables `--piloto-*`, cuyos valores de casa son
+   los de gs, (2) el CSS propio de gs que no es utilidad (`.ghosty-md`,
+   `.gs-prosa`, la garra, los puntitos), (3) el blindaje contra el CSS de la app
+   anfitriona y (4) la pieza nueva: el pase de permiso.
 
-   Todo color, radio, sombra y grosor es una variable `--piloto-*`. Tres pieles
-   de casa por `data-skin`: ghosty (default), easybits y neutral; cada una con su
+   Pieles por `data-skin`: ghosty (default), easybits y neutral; cada una con su
    oscuro (`data-theme="dark"`, o `auto` siguiendo al sistema).
    ───────────────────────────────────────────────────────────────────────────── */
 
 .piloto {
-  /* Tipografía. Las fuentes no se descargan solas: `ghostykit/fonts.css` las trae. */
-  --piloto-font: "Schibsted Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --piloto-font-display: "Big Shoulders Stencil Display", "Schibsted Grotesk", Impact, "Arial Narrow", sans-serif;
+  --piloto-font: "Inter", "Inter Fallback", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  /* La prosa de las respuestas: serif, como claude.ai (en Apple sale New York). */
+  --piloto-font-prose: ui-serif, "New York", "Iowan Old Style", Georgia, Cambria, "Times New Roman", serif;
   --piloto-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --piloto-font-size: 15px;
+  /* El reloj y el sello del pase de permiso. */
+  --piloto-font-display: "Big Shoulders Stencil Display", Impact, "Arial Narrow", sans-serif;
 
-  /* Ghosty: papel blanco, tinta casi negra, lavanda y mantequilla. */
+  /* La unidad de las medidas (lo que vale 1rem dentro de Piloto). Ghosty corre a 18 px. */
+  --piloto-rem: 18px;
+
+  /* Ghosty (los tokens de gs `app.css`). */
   --piloto-bg: #ffffff;
-  --piloto-surface: #f4f4fb;
-  --piloto-surface-2: #e7e7f2;
+  --piloto-surface: #f6f6fa;
+  --piloto-surface-2: #e9ebef;
+  --piloto-surface-hover: #fafafd;
   --piloto-text: #191a20;
-  --piloto-text-2: #474956;
-  --piloto-text-3: #7d7f8c;
+  --piloto-text-2: #4b5563;
+  --piloto-text-3: #81838e;
   --piloto-text-disabled: #b6b6ba;
   --piloto-text-inverse: #ffffff;
   --piloto-inverse: #191a20;
-  --piloto-border: #191a20;
-  --piloto-border-2: #e3e3ec;
-  --piloto-accent: #8483e0;
-  --piloto-accent-strong: #6564cf;
-  --piloto-accent-soft: #dcdcfa;
+  --piloto-border: #e1e3e7;
+  --piloto-border-2: #e9ebef;
+  --piloto-accent-100: #f5f5fc;
+  --piloto-accent-soft: #aeadef;
+  --piloto-accent: #9a99ea;
+  --piloto-accent-strong: #8483e0;
   --piloto-on-accent: #ffffff;
-  --piloto-success: #3f9a62;
-  --piloto-success-soft: #c9ecd5;
-  --piloto-danger: #d64545;
-  --piloto-danger-soft: #fbd9d6;
+  --piloto-success: #7fbe60;
+  --piloto-danger: #ed695f;
   --piloto-warning: #ffd36e;
   --piloto-warning-ink: #191a20;
-  --piloto-focus: #6564cf;
-  --piloto-user-bubble: #dcdcfa;
+  --piloto-focus: #8483e0;
+  --piloto-user-bubble: #f0f0f4;
   --piloto-user-text: #191a20;
-  --piloto-shadow-color: #191a20;
+  --piloto-composer-bg: #ffffff;
 
-  /* Forma. */
-  --piloto-radius-bubble: 14px;
-  --piloto-radius-card: 14px;
-  --piloto-radius-input: 18px;
-  --piloto-radius-button: 10px;
-  --piloto-border-width: 2px;
-  --piloto-hairline: 1px;
-  --piloto-shadow-card: 4px 4px 0 var(--piloto-shadow-color);
-  --piloto-shadow-input: 4px 4px 0 var(--piloto-shadow-color);
-  --piloto-shadow-hero: 6px 6px 0 var(--piloto-shadow-color);
-  --piloto-max-width: 760px;
+  /* Forma (los valores de gs). */
+  --piloto-radius-bubble: 12px;
+  --piloto-radius-input: 24px;
+  --piloto-radius-card: 16px;
+  --piloto-radius-button: 12px;
+  --piloto-border-width: 1px;
+  --piloto-shadow-input: 0 12px 32px -16px rgb(25 26 32 / 0.25);
+  --piloto-shadow-color: #191a20;
+  /* El pase de permiso es lo único con sombra dura. */
+  --piloto-shadow-hero: 5px 5px 0 var(--piloto-shadow-color);
+  --piloto-ticket-border: 2px;
 
   position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  min-width: 0;
   width: 100%;
   background: var(--piloto-bg);
   color: var(--piloto-text);
   font-family: var(--piloto-font);
-  font-size: var(--piloto-font-size);
-  line-height: 1.55;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   isolation: isolate;
-  container-type: inline-size;
 }
 
-/* ── Ghosty, oscuro: la sombra dura se vuelve lavanda (negro sobre negro no se ve). ── */
+/* ── Ghosty, oscuro (los valores del widget oscuro de gs) ── */
 .piloto[data-theme="dark"] {
-  --piloto-bg: #15161c;
-  --piloto-surface: #1f2029;
-  --piloto-surface-2: #2b2c38;
-  --piloto-text: #eeeef4;
-  --piloto-text-2: #b9bac6;
-  --piloto-text-3: #858796;
-  --piloto-text-disabled: #575966;
-  --piloto-text-inverse: #15161c;
-  --piloto-inverse: #eeeef4;
-  --piloto-border: #eeeef4;
-  --piloto-border-2: #2b2c38;
-  --piloto-accent: #9998ef;
-  --piloto-accent-strong: #aeadf5;
-  --piloto-accent-soft: #33335a;
-  --piloto-on-accent: #15161c;
-  --piloto-success: #6fcf92;
-  --piloto-success-soft: #1d3a2a;
-  --piloto-danger: #ff7b72;
-  --piloto-danger-soft: #42201f;
-  --piloto-focus: #aeadf5;
-  --piloto-user-bubble: #33335a;
-  --piloto-user-text: #eeeef4;
+  color-scheme: dark;
+  --piloto-bg: #16171d;
+  --piloto-surface: #1e1f26;
+  --piloto-surface-2: #2a2b33;
+  --piloto-surface-hover: #22232a;
+  --piloto-text: #ececf1;
+  --piloto-text-2: #b6b6ba;
+  --piloto-text-3: #81838e;
+  --piloto-text-disabled: #5b5d66;
+  --piloto-text-inverse: #16171d;
+  --piloto-inverse: #ececf1;
+  --piloto-border: #2c2d36;
+  --piloto-border-2: #24252d;
+  --piloto-user-bubble: #2a2b33;
+  --piloto-user-text: #ececf1;
+  --piloto-composer-bg: #16171d;
+  --piloto-shadow-input: 0 12px 32px -16px rgb(0 0 0 / 0.6);
   --piloto-shadow-color: #8483e0;
 }
 
-/* ── EasyBits: morado y ámbar, brutalista, nace oscuro. ── */
+/* ── EasyBits: morado y ámbar, contornos negros y sombras duras (brutalista). ── */
 .piloto[data-skin="easybits"] {
-  --piloto-font-display: "Big Shoulders Stencil Display", Impact, sans-serif;
-  --piloto-bg: #fffdf7;
+  --piloto-rem: 16px;
+  --piloto-font: "Satoshi", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --piloto-bg: #ffffff;
   --piloto-surface: #f6f1ff;
   --piloto-surface-2: #ece3ff;
+  --piloto-surface-hover: #faf7ff;
   --piloto-text: #0b0b0f;
   --piloto-text-2: #3d3a48;
   --piloto-text-3: #75707f;
-  --piloto-text-inverse: #ffffff;
   --piloto-inverse: #0b0b0f;
   --piloto-border: #0b0b0f;
   --piloto-border-2: #e6e0f2;
+  --piloto-accent-100: #f6f1ff;
+  --piloto-accent-soft: #a78bfa;
   --piloto-accent: #7c3aed;
   --piloto-accent-strong: #6d28d9;
-  --piloto-accent-soft: #ede4ff;
-  --piloto-on-accent: #ffffff;
   --piloto-warning: #fbbf24;
   --piloto-warning-ink: #0b0b0f;
   --piloto-focus: #9870ed;
-  --piloto-user-bubble: #7c3aed;
-  --piloto-user-text: #ffffff;
+  --piloto-user-bubble: #ede4ff;
+  --piloto-user-text: #0b0b0f;
+  --piloto-radius-bubble: 10px;
+  --piloto-radius-input: 12px;
+  --piloto-radius-card: 12px;
+  --piloto-radius-button: 8px;
+  --piloto-border-width: 2px;
+  --piloto-shadow-input: 4px 4px 0 #0b0b0f;
   --piloto-shadow-color: #0b0b0f;
-  --piloto-radius-bubble: 4px;
-  --piloto-radius-card: 4px;
-  --piloto-radius-input: 6px;
-  --piloto-radius-button: 4px;
-  --piloto-border-width: 3px;
-  --piloto-shadow-card: 5px 5px 0 var(--piloto-shadow-color);
-  --piloto-shadow-input: 5px 5px 0 #7c3aed;
-  --piloto-shadow-hero: 7px 7px 0 #fbbf24;
+  --piloto-shadow-hero: 6px 6px 0 #7c3aed;
 }
 .piloto[data-skin="easybits"][data-theme="dark"] {
   --piloto-bg: #0b0b0f;
   --piloto-surface: #16141f;
   --piloto-surface-2: #241f33;
+  --piloto-surface-hover: #1c1928;
   --piloto-text: #f6f4fb;
   --piloto-text-2: #c5c0d3;
   --piloto-text-3: #8d879c;
@@ -144,150 +143,148 @@
   --piloto-inverse: #f6f4fb;
   --piloto-border: #f6f4fb;
   --piloto-border-2: #241f33;
+  --piloto-accent-soft: #c4b5fd;
   --piloto-accent: #8b5cf6;
   --piloto-accent-strong: #a78bfa;
-  --piloto-accent-soft: #2a1d4d;
-  --piloto-on-accent: #ffffff;
-  --piloto-success: #4ade80;
-  --piloto-success-soft: #14321f;
-  --piloto-danger: #f87171;
-  --piloto-danger-soft: #3b1515;
-  --piloto-user-bubble: #7c3aed;
+  --piloto-user-bubble: #2a1d4d;
+  --piloto-user-text: #f6f4fb;
+  --piloto-composer-bg: #0b0b0f;
+  --piloto-shadow-input: 4px 4px 0 #7c3aed;
   --piloto-shadow-color: #7c3aed;
-  --piloto-shadow-input: 5px 5px 0 #7c3aed;
-  --piloto-shadow-hero: 7px 7px 0 #fbbf24;
+  --piloto-shadow-hero: 6px 6px 0 #fbbf24;
 }
 
-/* ── Neutral: grafito monocromo, contorno fino; para apps con su propia marca fuerte. ── */
+/* ── Neutral: grafito, sin color de marca; para apps con su propia identidad fuerte. ── */
 .piloto[data-skin="neutral"] {
+  --piloto-rem: 16px;
   --piloto-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --piloto-font-display: ui-sans-serif, system-ui, sans-serif;
   --piloto-bg: #ffffff;
   --piloto-surface: #f5f5f4;
   --piloto-surface-2: #e7e5e4;
+  --piloto-surface-hover: #fafaf9;
   --piloto-text: #1c1917;
   --piloto-text-2: #44403c;
   --piloto-text-3: #78716c;
   --piloto-inverse: #1c1917;
-  --piloto-border: #1c1917;
-  --piloto-border-2: #e7e5e4;
+  --piloto-border: #e7e5e4;
+  --piloto-border-2: #f5f5f4;
+  --piloto-accent-100: #fafaf9;
+  --piloto-accent-soft: #a8a29e;
   --piloto-accent: #1c1917;
   --piloto-accent-strong: #1c1917;
-  --piloto-accent-soft: #e7e5e4;
-  --piloto-on-accent: #ffffff;
   --piloto-warning: #f5f5f4;
-  --piloto-warning-ink: #1c1917;
   --piloto-focus: #2563eb;
   --piloto-user-bubble: #f5f5f4;
-  --piloto-user-text: #1c1917;
-  --piloto-shadow-color: #d6d3d1;
   --piloto-radius-bubble: 10px;
-  --piloto-radius-card: 10px;
-  --piloto-radius-input: 12px;
+  --piloto-radius-input: 14px;
+  --piloto-radius-card: 12px;
   --piloto-radius-button: 8px;
-  --piloto-border-width: 1px;
-  --piloto-shadow-card: 0 0 0 transparent;
-  --piloto-shadow-input: 3px 3px 0 var(--piloto-shadow-color);
-  --piloto-shadow-hero: 4px 4px 0 var(--piloto-shadow-color);
+  --piloto-shadow-input: 0 1px 2px rgb(0 0 0 / 0.06);
+  --piloto-shadow-color: #d6d3d1;
+  --piloto-shadow-hero: 4px 4px 0 #d6d3d1;
+  --piloto-ticket-border: 1px;
 }
 .piloto[data-skin="neutral"][data-theme="dark"] {
   --piloto-bg: #171615;
   --piloto-surface: #22201f;
   --piloto-surface-2: #2e2b29;
+  --piloto-surface-hover: #1d1b1a;
   --piloto-text: #f5f5f4;
   --piloto-text-2: #d6d3d1;
   --piloto-text-3: #a8a29e;
   --piloto-text-disabled: #57534e;
   --piloto-text-inverse: #171615;
   --piloto-inverse: #f5f5f4;
-  --piloto-border: #a8a29e;
-  --piloto-border-2: #2e2b29;
+  --piloto-border: #2e2b29;
+  --piloto-border-2: #22201f;
   --piloto-accent: #f5f5f4;
   --piloto-accent-strong: #f5f5f4;
-  --piloto-accent-soft: #2e2b29;
   --piloto-on-accent: #171615;
   --piloto-warning: #22201f;
   --piloto-warning-ink: #f5f5f4;
-  --piloto-success: #86efac;
-  --piloto-success-soft: #1c3326;
-  --piloto-danger: #fca5a5;
-  --piloto-danger-soft: #3f1d1d;
   --piloto-user-bubble: #2e2b29;
   --piloto-user-text: #f5f5f4;
+  --piloto-composer-bg: #171615;
   --piloto-shadow-color: #000000;
+  --piloto-shadow-hero: 4px 4px 0 #000000;
 }
 
-/* `theme="auto"`: el oscuro de cada piel, siguiendo al sistema. */
 @media (prefers-color-scheme: dark) {
-  .piloto[data-theme="auto"] {
-    --piloto-bg: #15161c;
-    --piloto-surface: #1f2029;
-    --piloto-surface-2: #2b2c38;
-    --piloto-text: #eeeef4;
-    --piloto-text-2: #b9bac6;
-    --piloto-text-3: #858796;
-    --piloto-text-disabled: #575966;
-    --piloto-text-inverse: #15161c;
-    --piloto-inverse: #eeeef4;
-    --piloto-border: #eeeef4;
-    --piloto-border-2: #2b2c38;
-    --piloto-accent: #9998ef;
-    --piloto-accent-strong: #aeadf5;
-    --piloto-accent-soft: #33335a;
-    --piloto-on-accent: #15161c;
-    --piloto-success: #6fcf92;
-    --piloto-success-soft: #1d3a2a;
-    --piloto-danger: #ff7b72;
-    --piloto-danger-soft: #42201f;
-    --piloto-focus: #aeadf5;
-    --piloto-user-bubble: #33335a;
-    --piloto-user-text: #eeeef4;
-    --piloto-shadow-color: #8483e0;
-  }
-  .piloto[data-skin="easybits"][data-theme="auto"] {
-    --piloto-bg: #0b0b0f;
-    --piloto-surface: #16141f;
-    --piloto-surface-2: #241f33;
-    --piloto-text: #f6f4fb;
-    --piloto-text-2: #c5c0d3;
-    --piloto-text-3: #8d879c;
-    --piloto-text-inverse: #0b0b0f;
-    --piloto-inverse: #f6f4fb;
-    --piloto-border: #f6f4fb;
-    --piloto-border-2: #241f33;
-    --piloto-accent: #8b5cf6;
-    --piloto-accent-strong: #a78bfa;
-    --piloto-accent-soft: #2a1d4d;
-    --piloto-success: #4ade80;
-    --piloto-success-soft: #14321f;
-    --piloto-danger: #f87171;
-    --piloto-danger-soft: #3b1515;
-    --piloto-shadow-color: #7c3aed;
-  }
-  .piloto[data-skin="neutral"][data-theme="auto"] {
-    --piloto-bg: #171615;
-    --piloto-surface: #22201f;
-    --piloto-surface-2: #2e2b29;
-    --piloto-text: #f5f5f4;
-    --piloto-text-2: #d6d3d1;
-    --piloto-text-3: #a8a29e;
-    --piloto-text-inverse: #171615;
-    --piloto-inverse: #f5f5f4;
-    --piloto-border: #a8a29e;
-    --piloto-border-2: #2e2b29;
-    --piloto-accent: #f5f5f4;
-    --piloto-accent-strong: #f5f5f4;
-    --piloto-accent-soft: #2e2b29;
-    --piloto-on-accent: #171615;
-    --piloto-warning: #22201f;
-    --piloto-warning-ink: #f5f5f4;
-    --piloto-user-bubble: #2e2b29;
-    --piloto-user-text: #f5f5f4;
-    --piloto-shadow-color: #000000;
-  }
+.piloto[data-theme="auto"] {
+  color-scheme: dark;
+  --piloto-bg: #16171d;
+  --piloto-surface: #1e1f26;
+  --piloto-surface-2: #2a2b33;
+  --piloto-surface-hover: #22232a;
+  --piloto-text: #ececf1;
+  --piloto-text-2: #b6b6ba;
+  --piloto-text-3: #81838e;
+  --piloto-text-disabled: #5b5d66;
+  --piloto-text-inverse: #16171d;
+  --piloto-inverse: #ececf1;
+  --piloto-border: #2c2d36;
+  --piloto-border-2: #24252d;
+  --piloto-user-bubble: #2a2b33;
+  --piloto-user-text: #ececf1;
+  --piloto-composer-bg: #16171d;
+  --piloto-shadow-input: 0 12px 32px -16px rgb(0 0 0 / 0.6);
+  --piloto-shadow-color: #8483e0;
+}
+.piloto[data-skin="easybits"][data-theme="auto"] {
+  --piloto-bg: #0b0b0f;
+  --piloto-surface: #16141f;
+  --piloto-surface-2: #241f33;
+  --piloto-surface-hover: #1c1928;
+  --piloto-text: #f6f4fb;
+  --piloto-text-2: #c5c0d3;
+  --piloto-text-3: #8d879c;
+  --piloto-text-disabled: #4f4a5c;
+  --piloto-text-inverse: #0b0b0f;
+  --piloto-inverse: #f6f4fb;
+  --piloto-border: #f6f4fb;
+  --piloto-border-2: #241f33;
+  --piloto-accent-soft: #c4b5fd;
+  --piloto-accent: #8b5cf6;
+  --piloto-accent-strong: #a78bfa;
+  --piloto-user-bubble: #2a1d4d;
+  --piloto-user-text: #f6f4fb;
+  --piloto-composer-bg: #0b0b0f;
+  --piloto-shadow-input: 4px 4px 0 #7c3aed;
+  --piloto-shadow-color: #7c3aed;
+  --piloto-shadow-hero: 6px 6px 0 #fbbf24;
+}
+.piloto[data-skin="neutral"][data-theme="auto"] {
+  --piloto-bg: #171615;
+  --piloto-surface: #22201f;
+  --piloto-surface-2: #2e2b29;
+  --piloto-surface-hover: #1d1b1a;
+  --piloto-text: #f5f5f4;
+  --piloto-text-2: #d6d3d1;
+  --piloto-text-3: #a8a29e;
+  --piloto-text-disabled: #57534e;
+  --piloto-text-inverse: #171615;
+  --piloto-inverse: #f5f5f4;
+  --piloto-border: #2e2b29;
+  --piloto-border-2: #22201f;
+  --piloto-accent: #f5f5f4;
+  --piloto-accent-strong: #f5f5f4;
+  --piloto-on-accent: #171615;
+  --piloto-warning: #22201f;
+  --piloto-warning-ink: #f5f5f4;
+  --piloto-user-bubble: #2e2b29;
+  --piloto-user-text: #f5f5f4;
+  --piloto-composer-bg: #171615;
+  --piloto-shadow-color: #000000;
+  --piloto-shadow-hero: 4px 4px 0 #000000;
+}
 }
 
-/* ── Reset con alcance: sólo dentro de Piloto, para apps sin Tailwind o con otro. ── */
+/* ── Reset con alcance y BLINDAJE contra el CSS de la app anfitriona ──────────
+   Apps con Tailwind 3 + @tailwindcss/forms (EasyBits) pintan TODO textarea/input
+   con borde, fondo blanco, padding y un anillo al enfocar (`textarea:focus`).
+   Dentro de Piloto eso no aplica: el campo no tiene caja propia, la caja es la
+   tarjeta. Las utilidades de Piloto (`.piloto .px-1`) siguen ganando porque
+   pesan más que estos selectores. */
 .piloto *,
 .piloto *::before,
 .piloto *::after {
@@ -296,15 +293,33 @@
   margin: 0;
   padding: 0;
 }
-.piloto button,
-.piloto input,
 .piloto textarea,
-.piloto select {
+.piloto input,
+.piloto select,
+.piloto button {
+  -webkit-appearance: none;
+  appearance: none;
   font: inherit;
   color: inherit;
-  background: transparent;
   letter-spacing: inherit;
+  background-color: transparent;
+  background-image: none;
+  border-radius: 0;
+  box-shadow: none;
 }
+.piloto textarea:focus,
+.piloto textarea:focus-visible,
+.piloto input:focus,
+.piloto input:focus-visible,
+.piloto select:focus {
+  outline: none;
+  box-shadow: none;
+  border-color: transparent;
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-ring-offset-shadow: 0 0 #0000;
+  --tw-ring-color: transparent;
+}
+.piloto input[type="file"] { display: none; }
 .piloto button { cursor: pointer; }
 .piloto button:disabled { cursor: default; }
 .piloto ul,
@@ -315,48 +330,87 @@
 .piloto svg { display: inline-block; flex-shrink: 0; vertical-align: middle; }
 .piloto a { color: inherit; text-decoration: inherit; }
 .piloto summary { list-style: revert; }
-.piloto :focus-visible { outline: 3px solid var(--piloto-focus); outline-offset: 2px; }
+.piloto h1,
+.piloto h2,
+.piloto h3 { font-size: inherit; font-weight: inherit; }
 .piloto [hidden] { display: none !important; }
 
-/* ── El marco ─────────────────────────────────────────────────────────────── */
-.piloto .piloto-column,
-.piloto .piloto-dock { max-width: var(--piloto-max-width); }
-.piloto .piloto-agent { max-width: min(100%, 68ch); }
-.piloto .piloto-scroll { scrollbar-width: thin; scrollbar-color: var(--piloto-border-2) transparent; }
+/* ── CSS de Ghosty Studio (gs `app.css`), tal cual ────────────────────────── */
+/* Barra de desplazamiento fina y del color de los bordes. */
+.piloto .gs-scroll { scrollbar-width: thin; scrollbar-color: var(--piloto-border) transparent; }
+.piloto .gs-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.piloto .gs-scroll::-webkit-scrollbar-track { background: transparent; }
+.piloto .gs-scroll::-webkit-scrollbar-thumb { background-color: var(--piloto-border); border-radius: 9999px; border: 2px solid transparent; background-clip: content-box; }
+.piloto .gs-scroll:hover::-webkit-scrollbar-thumb { background-color: var(--piloto-text-3); }
 
-/* Tu mensaje: una pieza sólida de color, sin sombra (la sombra es de lo que se toca). */
-.piloto .piloto-bubble-user {
-  background: var(--piloto-user-bubble);
-  color: var(--piloto-user-text);
-  border: var(--piloto-hairline) solid color-mix(in srgb, var(--piloto-border) 22%, transparent);
+/* Markdown de gs. */
+.piloto .ghosty-md { line-height: 1.5; font-size: 0.875rem; }
+.piloto .ghosty-md p { margin: 0 0 0.75rem 0; }
+.piloto .ghosty-md p:last-child { margin-bottom: 0; }
+.piloto .ghosty-md h1, .piloto .ghosty-md h2, .piloto .ghosty-md h3 { margin: 0.75rem 0 0.5rem 0; font-weight: 600; }
+.piloto .ghosty-md h1:first-child, .piloto .ghosty-md h2:first-child, .piloto .ghosty-md h3:first-child { margin-top: 0; }
+.piloto .ghosty-md ul, .piloto .ghosty-md ol { padding-left: 0; margin: 0.5rem 0; list-style: none; }
+.piloto .ghosty-md ul:first-child, .piloto .ghosty-md ol:first-child { margin-top: 0; }
+.piloto .ghosty-md ul:last-child, .piloto .ghosty-md ol:last-child { margin-bottom: 0; }
+.piloto .ghosty-md ol { counter-reset: list-counter 0; }
+.piloto .ghosty-md li { position: relative; padding-left: 1.25rem; margin: 0 0 0.25rem 0; line-height: 1.5; }
+.piloto .ghosty-md li:last-child { margin-bottom: 0; }
+.piloto .ghosty-md ul > li::before { content: "•"; position: absolute; left: 0.25rem; color: var(--piloto-text-3); }
+.piloto .ghosty-md ol > li { counter-increment: list-counter 1; }
+.piloto .ghosty-md ol > li::before { content: counter(list-counter) "."; position: absolute; left: 0; color: var(--piloto-text-3); font-weight: 500; }
+.piloto .ghosty-md strong { font-weight: 600; }
+.piloto .ghosty-md em { font-style: italic; }
+.piloto .ghosty-md a { color: var(--piloto-accent-strong); text-decoration: underline; text-underline-offset: 2px; }
+.piloto .ghosty-md code { background: var(--piloto-surface-2); color: var(--piloto-text); padding: 0.1rem 0.35rem; border-radius: 0.25rem; font-size: 0.8125rem; font-family: var(--piloto-font-mono); }
+.piloto .ghosty-md pre { background: var(--piloto-surface); border: 1px solid var(--piloto-border); color: var(--piloto-text); padding: 0.75rem; border-radius: 0.5rem; font-size: 0.8125rem; font-family: var(--piloto-font-mono); overflow-x: auto; margin: 0.5rem 0; }
+.piloto .ghosty-md pre:last-child { margin-bottom: 0; }
+.piloto .ghosty-md pre code { background: none; padding: 0; color: inherit; }
+.piloto .ghosty-md blockquote { border-left: 2px solid var(--piloto-border); padding-left: 0.75rem; color: var(--piloto-text-3); margin: 0.5rem 0; }
+.piloto .ghosty-md img { max-width: 100%; height: auto; display: block; margin: 0.5rem 0; border-radius: 0.5rem; border: 1px solid var(--piloto-border); }
+/* El hilo del CRM (drawer del tablero, /crm): la burbuja del agente es blanca (o ámbar si
+
+/* La prosa de las respuestas: serif 16/24 (claude.ai usa su serif). La narración, igual, un punto menor. */
+.piloto .gs-prosa .ghosty-md,
+.piloto .gs-narracion { font-family: var(--piloto-font-prose); font-size: 16px; line-height: 24px; }
+.piloto .gs-narracion { font-size: 15px; line-height: 22px; }
+.piloto .gs-prosa .ghosty-md li { line-height: 24px; }
+.piloto .gs-prosa .ghosty-md p { margin-bottom: 0.9rem; }
+.piloto .gs-prosa .ghosty-md p:last-child { margin-bottom: 0; }
+.piloto .piloto-narration-text code { background: var(--piloto-surface-2); padding: 0.05rem 0.3rem; border-radius: 0.25rem; font-size: 0.85em; font-family: var(--piloto-font-mono); }
+.piloto .piloto-narration-text strong { font-weight: 600; color: var(--piloto-text); }
+.piloto .piloto-narration-text a { color: var(--piloto-accent-strong); text-decoration: underline; text-underline-offset: 2px; }
+
+/* Cada tramo del texto al ritmo (`TextAtPace`) y los pasos que entran. */
+@keyframes gs-tramo { from { opacity: 0; } }
+@keyframes gs-paso-in { from { opacity: 0; transform: translateY(3px); } }
+.piloto .gs-paso-in { animation: gs-paso-in 0.3s ease-out both; }
+
+/* Puntitos de «escribiendo»: el rebote de siempre en el color de marca. */
+.piloto .gc-typing-dot {
+  background-color: var(--piloto-accent);
+  animation-duration: 900ms;
+  animation-delay: calc(var(--i, 0) * 150ms);
 }
 
-/* La caja de escribir: contorno grueso y sombra dura. Al enfocar, la sombra se corre: «listo». */
-.piloto .piloto-composer {
-  background: var(--piloto-bg);
-  border: var(--piloto-border-width) solid var(--piloto-border);
-  box-shadow: var(--piloto-shadow-input);
-  transition: box-shadow 120ms ease-out, transform 120ms ease-out;
-}
-.piloto .piloto-composer:focus-within { transform: translate(-1px, -1px); box-shadow: 6px 6px 0 var(--piloto-accent); }
-.piloto[data-skin="neutral"] .piloto-composer:focus-within { transform: none; box-shadow: 0 0 0 3px var(--piloto-accent-soft); }
-.piloto .piloto-textarea::placeholder { color: var(--piloto-text-3); }
-/* El foco de la caja lo dice su sombra; el anillo va en los botones. */
-.piloto .piloto-textarea:focus-visible { outline: none; }
+/* La garra: baja, cierra, sube con el premio, suelta y descansa; en bucle. */
+.piloto .gs-garra { overflow: visible; }
+.piloto .gs-garra-rig,
+.piloto .gs-garra-l,
+.piloto .gs-garra-r { transform-box: fill-box; }
+.piloto .gs-garra-l { transform-origin: 100% 0; }
+.piloto .gs-garra-r { transform-origin: 0 0; }
+.piloto .gs-garra .gs-garra-rig { animation: gs-garra-dip 2.4s ease-in-out infinite both; }
+.piloto .gs-garra .gs-garra-l { animation: gs-garra-l 2.4s ease-in-out infinite both; }
+.piloto .gs-garra .gs-garra-r { animation: gs-garra-r 2.4s ease-in-out infinite both; }
+@keyframes gs-garra-dip { 0%, 55%, 100% { transform: translateY(0); } 15%, 25% { transform: translateY(2.5px); } 40% { transform: translateY(0); } }
+@keyframes gs-garra-l { 0%, 15%, 50%, 100% { transform: rotate(0); } 25%, 40% { transform: rotate(-16deg); } }
+@keyframes gs-garra-r { 0%, 15%, 50%, 100% { transform: rotate(0); } 25%, 40% { transform: rotate(16deg); } }
 
-.piloto .piloto-send {
-  background: var(--piloto-surface-2);
-  color: var(--piloto-text-disabled);
-  border: var(--piloto-border-width) solid transparent;
-}
-.piloto .piloto-send[data-ready] {
-  background: var(--piloto-accent);
-  color: var(--piloto-on-accent);
-  border-color: var(--piloto-border);
-}
-.piloto .piloto-send[data-ready]:hover { background: var(--piloto-accent-strong); }
-.piloto .piloto-send[data-ready]:active { transform: translate(1px, 1px); }
+/* El bloque de código y la tabla de Streamdown, con el borde de la piel. */
+.piloto .ghosty-md [data-streamdown="code-block"],
+.piloto .ghosty-md [data-streamdown="table-wrapper"] { margin: 0.75rem 0; }
 
+/* ── La pieza nueva: el pase de permiso ─────────────────────────────────── */
 /* Botones con peso: presionarlos los hunde en su sombra. */
 .piloto .piloto-btn {
   display: inline-flex;
@@ -366,7 +420,7 @@
   min-height: 40px;
   padding: 0 1.1em;
   border-radius: var(--piloto-radius-button);
-  border: var(--piloto-border-width) solid var(--piloto-border);
+  border: var(--piloto-ticket-border) solid var(--piloto-text);
   font-weight: 650;
   font-size: 0.94em;
   transition: transform 90ms ease-out, box-shadow 90ms ease-out, background-color 120ms;
@@ -382,114 +436,6 @@
 .piloto .piloto-btn-quiet { background: var(--piloto-bg); color: var(--piloto-text); }
 .piloto .piloto-btn-quiet:not(:disabled):hover { background: var(--piloto-surface); }
 .piloto .piloto-btn[aria-busy] { animation: piloto-blink 0.8s steps(2, jump-none) infinite; }
-.piloto .piloto-primary { background: var(--piloto-accent); color: var(--piloto-on-accent); }
-.piloto .piloto-secondary { background: var(--piloto-surface); color: var(--piloto-text); border: var(--piloto-hairline) solid var(--piloto-border-2); }
-
-/* Los pasos: en vivo, renglones sueltos; al cerrar el turno la misma vista se vuelve tarjeta. */
-.piloto .piloto-steps {
-  border: var(--piloto-border-width) solid var(--piloto-border-2);
-  background: var(--piloto-bg);
-}
-.piloto .piloto-steps:hover { border-color: var(--piloto-border); }
-.piloto .piloto-steps[data-live] { border-color: transparent; background: transparent; }
-.piloto .piloto-step-detail { color: var(--piloto-text-3); margin-left: 0.6em; }
-.piloto .piloto-step { animation: piloto-step-in 220ms cubic-bezier(0.2, 0.9, 0.3, 1.3) both; }
-
-/* La narración: casillas palomeadas de una lista de verificación. */
-.piloto .piloto-narration > li > span:first-child {
-  border: var(--piloto-hairline) solid var(--piloto-accent);
-  border-radius: 4px;
-  background: var(--piloto-accent-soft);
-  color: var(--piloto-accent-strong);
-}
-
-/* Opciones de respuesta: botones de ancho completo con contorno. */
-.piloto .piloto-option {
-  border: var(--piloto-border-width) solid var(--piloto-border-2);
-  border-radius: var(--piloto-radius-button);
-}
-.piloto .piloto-option:hover { border-color: var(--piloto-border); background: var(--piloto-surface); }
-.piloto .piloto-suggestion {
-  border: var(--piloto-border-width) solid var(--piloto-border-2);
-}
-.piloto .piloto-suggestion:hover { border-color: var(--piloto-border); color: var(--piloto-text); }
-
-.piloto .piloto-reference {
-  border: var(--piloto-hairline) solid var(--piloto-accent);
-  background: var(--piloto-accent-soft);
-}
-
-.piloto .piloto-to-bottom { border: var(--piloto-border-width) solid var(--piloto-border); background: var(--piloto-bg); color: var(--piloto-text); }
-
-.piloto .piloto-menu { border: var(--piloto-border-width) solid var(--piloto-border); box-shadow: var(--piloto-shadow-card); }
-.piloto .piloto-drop { background: color-mix(in srgb, var(--piloto-bg) 86%, transparent); }
-.piloto .piloto-dialog { border: var(--piloto-border-width) solid var(--piloto-border); box-shadow: var(--piloto-shadow-hero); }
-.piloto .piloto-avatar-default {
-  display: block;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: var(--piloto-accent);
-  border: var(--piloto-border-width) solid var(--piloto-border);
-  box-shadow: 3px 3px 0 var(--piloto-shadow-color);
-}
-/* El estado vacío: si no cabe, se desplaza (nunca recorta el saludo ni la sombra del composer). */
-.piloto .piloto-empty {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 16px 16px 24px;
-}
-.piloto .piloto-empty-inner {
-  margin: auto 0;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding-bottom: 6vh;
-}
-.piloto .piloto-welcome-text {
-  font-family: var(--piloto-font-display);
-  font-weight: 800;
-  /* Al ancho del CONTENEDOR (un panel lateral no es la ventana). */
-  font-size: clamp(26px, 8cqi, 44px);
-  line-height: 1;
-  letter-spacing: 0.01em;
-  max-width: 18ch;
-  color: var(--piloto-text);
-  text-wrap: balance;
-}
-.piloto .piloto-welcome-text[data-long] {
-  font-family: var(--piloto-font);
-  font-weight: 600;
-  font-size: clamp(16px, 4.2cqi, 19px);
-  line-height: 1.45;
-  letter-spacing: 0;
-  max-width: 44ch;
-  color: var(--piloto-text-2);
-}
-.piloto .piloto-narration-text code { background: var(--piloto-surface-2); padding: 0.05rem 0.3rem; border-radius: 4px; font-size: 0.88em; font-family: var(--piloto-font-mono); }
-.piloto .piloto-narration-text strong { font-weight: 700; color: var(--piloto-text); }
-.piloto .piloto-narration-text a { text-decoration: underline; text-decoration-color: var(--piloto-accent); text-underline-offset: 2px; }
-.piloto .piloto-wait-time { margin-left: 0.7em; color: var(--piloto-text-3); font-variant-numeric: tabular-nums; }
-.piloto .piloto-system-note { border: var(--piloto-hairline) solid var(--piloto-border-2); }
-
-/* Pensando: tres luces de cabina que se encienden por turno, sin suavizado (steps). */
-.piloto .piloto-typing { display: flex; gap: 5px; }
-.piloto .piloto-typing-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 2px;
-  border: var(--piloto-hairline) solid var(--piloto-border);
-  background: var(--piloto-surface-2);
-  animation: piloto-lamp 1.2s steps(1, end) infinite;
-}
-.piloto .piloto-typing-dot:nth-child(2) { animation-delay: 0.4s; }
-.piloto .piloto-typing-dot:nth-child(3) { animation-delay: 0.8s; }
-.piloto .piloto-rec-dot { background: var(--piloto-danger); animation: piloto-blink 1s steps(2, jump-none) infinite; }
 
 /* ── El pase de permiso (la pieza héroe) ───────────────────────────────────── */
 .piloto .piloto-ticket {
@@ -497,7 +443,7 @@
   max-width: min(100%, 560px);
   background: var(--piloto-bg);
   color: var(--piloto-text);
-  border: var(--piloto-border-width) solid var(--piloto-border);
+  border: var(--piloto-ticket-border) solid var(--piloto-text);
   border-radius: var(--piloto-radius-card);
   box-shadow: var(--piloto-shadow-hero);
   animation: piloto-ticket-in 340ms cubic-bezier(0.2, 0.9, 0.25, 1.25) both;
@@ -511,7 +457,7 @@
   height: 38px;
   flex-shrink: 0;
   border-radius: 50%;
-  border: var(--piloto-border-width) solid currentColor;
+  border: var(--piloto-ticket-border) solid currentColor;
   background: var(--piloto-bg);
   color: var(--piloto-text);
 }
@@ -522,7 +468,7 @@
   margin-top: 6px;
   padding: 1px 7px;
   border-radius: 4px;
-  border: var(--piloto-hairline) solid currentColor;
+  border: 1px solid currentColor;
   font-family: var(--piloto-font-mono);
   font-size: 0.78em;
   opacity: 0.85;
@@ -531,7 +477,7 @@
 .piloto .piloto-ticket-tear {
   position: relative;
   height: 0;
-  border-top: var(--piloto-border-width) dashed var(--piloto-border);
+  border-top: var(--piloto-ticket-border) dashed var(--piloto-text);
 }
 .piloto .piloto-ticket-tear::before,
 .piloto .piloto-ticket-tear::after {
@@ -542,7 +488,7 @@
   height: 16px;
   border-radius: 50%;
   background: var(--piloto-bg);
-  border: var(--piloto-border-width) solid var(--piloto-border);
+  border: var(--piloto-ticket-border) solid var(--piloto-text);
 }
 .piloto .piloto-ticket-tear::before { left: -10px; }
 .piloto .piloto-ticket-tear::after { right: -10px; }
@@ -561,7 +507,7 @@
 }
 .piloto .piloto-ticket[data-urgent] .piloto-ticket-clock { color: var(--piloto-danger); }
 /* La mecha: lo que queda, una barra sólida que se consume. */
-.piloto .piloto-fuse { height: 8px; background: var(--piloto-surface-2); border-top: var(--piloto-border-width) solid var(--piloto-border); }
+.piloto .piloto-fuse { height: 8px; background: var(--piloto-surface-2); border-top: var(--piloto-ticket-border) solid var(--piloto-text); }
 .piloto .piloto-fuse > span {
   display: block;
   height: 100%;
@@ -613,72 +559,7 @@
 .piloto .piloto-decision strong { color: var(--piloto-text); font-weight: 650; }
 .piloto .piloto-decision-detail { color: var(--piloto-text-3); }
 
-/* ── Markdown de las respuestas (Streamdown) ── */
-.piloto .piloto-md { line-height: 1.62; color: var(--piloto-text); }
-.piloto .piloto-md p { margin: 0 0 0.8rem 0; }
-.piloto .piloto-md p:last-child { margin-bottom: 0; }
-.piloto .piloto-md h1,
-.piloto .piloto-md h2,
-.piloto .piloto-md h3,
-.piloto .piloto-md h4 { margin: 1.1rem 0 0.45rem 0; font-weight: 750; line-height: 1.25; text-wrap: balance; }
-.piloto .piloto-md h1 { font-size: 1.4em; }
-.piloto .piloto-md h2 { font-size: 1.22em; }
-.piloto .piloto-md h3 { font-size: 1.08em; }
-.piloto .piloto-md h1:first-child,
-.piloto .piloto-md h2:first-child,
-.piloto .piloto-md h3:first-child { margin-top: 0; }
-.piloto .piloto-md ul,
-.piloto .piloto-md ol { margin: 0.5rem 0 0.8rem; padding: 0; }
-.piloto .piloto-md ol { counter-reset: piloto-list 0; }
-.piloto .piloto-md li { position: relative; padding-left: 1.4rem; margin: 0 0 0.3rem 0; }
-.piloto .piloto-md ul > li::before {
-  content: "";
-  position: absolute;
-  left: 0.3rem;
-  top: 0.62em;
-  width: 6px;
-  height: 6px;
-  background: var(--piloto-accent);
-  border-radius: 1px;
-}
-.piloto .piloto-md ol > li { counter-increment: piloto-list 1; }
-.piloto .piloto-md ol > li::before { content: counter(piloto-list) "."; position: absolute; left: 0; color: var(--piloto-text-3); font-weight: 650; font-variant-numeric: tabular-nums; }
-.piloto .piloto-md strong { font-weight: 700; }
-.piloto .piloto-md em { font-style: italic; }
-.piloto .piloto-md a {
-  color: var(--piloto-text);
-  text-decoration: underline;
-  text-decoration-color: var(--piloto-accent);
-  text-decoration-thickness: 2px;
-  text-underline-offset: 3px;
-}
-.piloto .piloto-md a:hover { background: var(--piloto-accent-soft); }
-.piloto .piloto-md :not(pre) > code { background: var(--piloto-surface-2); padding: 0.1rem 0.35rem; border-radius: 4px; font-size: 0.86em; font-family: var(--piloto-font-mono); }
-.piloto .piloto-md pre { max-width: 100%; overflow-x: auto; font-family: var(--piloto-font-mono); font-size: 0.85em; }
-.piloto .piloto-md blockquote { border-left: 3px solid var(--piloto-accent); padding-left: 0.85rem; color: var(--piloto-text-2); margin: 0.6rem 0; }
-.piloto .piloto-md hr { border-top: var(--piloto-border-width) solid var(--piloto-border-2); margin: 1.2rem 0; }
-.piloto .piloto-md table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-.piloto .piloto-md th { font-weight: 700; text-align: left; background: var(--piloto-surface); }
-.piloto .piloto-md th,
-.piloto .piloto-md td { border: var(--piloto-hairline) solid var(--piloto-border-2); padding: 0.4rem 0.7rem; }
-.piloto .piloto-md img { max-width: 100%; height: auto; border-radius: 6px; }
-.piloto .piloto-md [data-streamdown="code-block"],
-.piloto .piloto-md [data-streamdown="table-wrapper"] {
-  margin: 0.8rem 0;
-  border: var(--piloto-border-width) solid var(--piloto-border-2) !important;
-  border-radius: calc(var(--piloto-radius-card) - 4px) !important;
-  box-shadow: none !important;
-}
 
-/* ── Movimiento: sólo lo que responde o dice «sigo vivo». Se apaga con reduce-motion. ── */
-@keyframes piloto-chunk { from { opacity: 0; } }
-@keyframes piloto-fade-up { from { opacity: 0; transform: translateY(4px); } }
-@keyframes piloto-step-in { from { opacity: 0; transform: translateX(-6px); } }
-@keyframes piloto-lamp { 0% { background: var(--piloto-accent); } 33%, 100% { background: var(--piloto-surface-2); } }
-@keyframes piloto-blink { 50% { opacity: 0.35; } }
-@keyframes piloto-pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.5); opacity: 0.5; } }
-@keyframes piloto-pop { from { transform: scale(0); } }
-@keyframes piloto-ellipsis { 0% { opacity: 0; } 20%, 80% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes piloto-ticket-in {
   from { opacity: 0; transform: translate(6px, 6px); box-shadow: 0 0 0 var(--piloto-shadow-color); }
 }
@@ -687,26 +568,9 @@
   70% { opacity: 1; transform: translateY(-50%) rotate(-8deg) scale(0.94); }
   100% { opacity: 1; transform: translateY(-50%) rotate(-9deg) scale(1); }
 }
-@keyframes piloto-claw-dip { 0%, 55%, 100% { transform: translateY(0); } 15%, 25% { transform: translateY(2.5px); } 40% { transform: translateY(0); } }
-@keyframes piloto-claw-l { 0%, 15%, 50%, 100% { transform: rotate(0); } 25%, 40% { transform: rotate(-16deg); } }
-@keyframes piloto-claw-r { 0%, 15%, 50%, 100% { transform: rotate(0); } 25%, 40% { transform: rotate(16deg); } }
 
-.piloto .piloto-chunk-in { animation: piloto-chunk 400ms linear both; }
-.piloto .piloto-fade-up { animation: piloto-fade-up 0.25s ease-out both; }
-.piloto .piloto-pulse { animation: piloto-pulse 1.1s ease-in-out infinite; }
-.piloto .piloto-pop { animation: piloto-pop 0.25s ease-out both; }
-.piloto .piloto-ellipsis { animation: piloto-ellipsis 1.4s linear infinite; }
-
-/* La garra: baja, cierra, sube con el premio, suelta y descansa. */
-.piloto .piloto-claw { overflow: visible; }
-.piloto .piloto-claw-rig,
-.piloto .piloto-claw-l,
-.piloto .piloto-claw-r { transform-box: fill-box; }
-.piloto .piloto-claw-l { transform-origin: 100% 0; }
-.piloto .piloto-claw-r { transform-origin: 0 0; }
-.piloto .piloto-claw .piloto-claw-rig { animation: piloto-claw-dip 2.4s ease-in-out infinite both; }
-.piloto .piloto-claw .piloto-claw-l { animation: piloto-claw-l 2.4s ease-in-out infinite both; }
-.piloto .piloto-claw .piloto-claw-r { animation: piloto-claw-r 2.4s ease-in-out infinite both; }
+@keyframes piloto-fade-up { from { opacity: 0; transform: translateY(4px); } }
+@keyframes piloto-blink { 50% { opacity: 0.35; } }
 
 @media (prefers-reduced-motion: reduce) {
   .piloto *,
@@ -716,7 +580,6 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-  .piloto .piloto-typing-dot:first-child { background: var(--piloto-accent); }
 }
 
 /* Teléfono: el pase ocupa el ancho y sus botones también. */

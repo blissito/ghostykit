@@ -1,16 +1,29 @@
-/* Entrada de Tailwind (sólo en el build). Las utilidades que usan los componentes de Piloto y las de
-   Streamdown se compilan aquí y `scripts/build-css.mjs` las encierra bajo `.piloto`: el consumidor no
-   necesita Tailwind, y si lo tiene (3 o 4) no choca con el suyo. Los colores apuntan a `--piloto-*`
-   (`@theme inline`): cambiar una variable cambia el chat entero. */
+/* Entrada de Tailwind (sólo en el build). Los componentes son los de Ghosty Studio con sus MISMAS
+   clases (`text-text-primary`, `border-outlines`, `bg-brand-500`…), así que aquí se declaran los
+   mismos tokens que el `@theme` de gs, pero apuntando a `--piloto-*`: la piel ghosty trae los valores
+   de gs y cada app cambia las variables. `scripts/build-css.mjs` encierra todo bajo `.piloto`. */
 @import "tailwindcss/theme.css";
 @import "tailwindcss/utilities.css";
 
 @source "../react";
 @source "../../../../node_modules/streamdown/dist/*.js";
 
-@theme inline {
+/* `static`: se emiten aunque ninguna utilidad las use (las lee también `base.css`). */
+@theme static {
   --font-sans: var(--piloto-font);
   --font-mono: var(--piloto-font-mono);
+
+  /* La paleta de Ghosty (gs `app.css`). */
+  --color-dark: var(--piloto-text);
+  --color-metal: var(--piloto-text-2);
+  --color-irongray: var(--piloto-text-3);
+  --color-outlines: var(--piloto-border);
+  --color-surfaceHover: var(--piloto-surface-hover);
+  --color-brand-100: var(--piloto-accent-100);
+  --color-brand-300: var(--piloto-accent-soft);
+  --color-brand-500: var(--piloto-accent);
+  --color-brand-600: var(--piloto-accent-strong);
+  --color-ring-info: var(--piloto-focus);
 
   --color-text-primary: var(--piloto-text);
   --color-text-secondary: var(--piloto-text-2);
@@ -25,21 +38,18 @@
   --color-background-secondary: var(--piloto-surface);
   --color-background-tertiary: var(--piloto-surface-2);
   --color-background-inverse: var(--piloto-inverse);
+  --color-background-disabled: var(--piloto-surface-2);
   --color-background-success: var(--piloto-success);
 
   --color-border-primary: var(--piloto-border);
   --color-border-secondary: var(--piloto-border-2);
-
-  --color-brand-300: var(--piloto-accent-soft);
-  --color-brand-500: var(--piloto-accent);
-  --color-brand-600: var(--piloto-accent-strong);
 
   /* Los tokens tipo shadcn que usa Streamdown por dentro. */
   --color-background: var(--piloto-bg);
   --color-foreground: var(--piloto-text);
   --color-muted: var(--piloto-surface);
   --color-muted-foreground: var(--piloto-text-3);
-  --color-border: var(--piloto-border-2);
+  --color-border: var(--piloto-border);
   --color-sidebar: var(--piloto-surface);
   --color-primary: var(--piloto-accent-strong);
   --color-primary-foreground: var(--piloto-on-accent);

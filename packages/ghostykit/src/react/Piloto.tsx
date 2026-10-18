@@ -25,7 +25,7 @@ import { applyReferences, cleanUserText } from "../core/text";
 import type { Attachment, PermissionRequest, Reference, Turn } from "../core/types";
 import type { PilotTransport } from "../transport";
 import { AgentBubble, UserBubble } from "./Bubble";
-import { Suggestions } from "./Chips";
+import { ReferenceChips, Suggestions } from "./Chips";
 import { Composer, type UploadResult } from "./Composer";
 import { ConfirmCard } from "./ConfirmCard";
 import { PilotoContext, rootProps, type MarkdownOptions, type PilotIcon, type PilotoConfig, type PilotTheme } from "./context";
@@ -320,8 +320,14 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
     return () => clearTimeout(id);
   }, [connected]);
 
+  // Lo señalado (referencias con `prompt`) va ARRIBA de la caja, como el chip de «Señalar» de Ghosty;
+  // las tarjetas del tablero, dentro.
+  const pointedRefs = refs.filter((r) => r.prompt);
+  const plainRefs = refs.filter((r) => !r.prompt);
+  const removeRef = (id: string) => setRefs(refsRef.current.filter((r) => r.id !== id));
   const composer = (
     <div ref={composerBox}>
+      <ReferenceChips references={pointedRefs} onRemove={removeRef} onActivate={props.onReferenceClick} />
       <Composer
         key={draft.n}
         initialValue={draft.text}
@@ -338,8 +344,8 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
         models={features.models === false ? [] : state.models}
         currentModel={state.currentModel}
         onModelChange={pilot.setModel}
-        references={refs}
-        onRemoveReference={(id) => setRefs(refsRef.current.filter((r) => r.id !== id))}
+        references={plainRefs}
+        onRemoveReference={removeRef}
         onActivateReference={props.onReferenceClick}
         extras={slots.composerExtras}
       />
@@ -350,26 +356,33 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
     <ConfirmCard key={p.id} request={p} onRespond={respond} onSettled={settle} onExpire={pilot.expirePermission} />
   ));
 
+  // ── PORTADO de `ChatView` de Ghosty Studio: mismo layout (estado vacío centrado, columna de
+  // 784 px, composer abajo), mismas clases.
   return (
     <PilotoContext.Provider value={config}>
       <div {...rootProps(theme, props.skin)} data-busy={busy || undefined} className={`piloto ${props.className ?? ""}`} style={props.style}>
         {empty ? (
-          // Si no cabe (panel bajo, saludo largo), se desplaza en vez de recortarse: el centrado es con
-          // márgenes automáticos, que nunca empujan contenido fuera del contenedor.
-          <div className="piloto-empty">
+          // Un hilo vacío enseña lo mismo que la portada: la cara, el saludo, la caja y por dónde
+          // empezar. Si no cabe (panel bajo), se desplaza: `safe center` nunca empuja nada fuera.
+          <div className="gs-scroll flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-4 pb-[10vh] [justify-content:safe_center]">
             {slots.headerActions && <div className="absolute right-4 top-3 flex gap-2">{slots.headerActions}</div>}
-            <div className="piloto-empty-inner">
             {!connected && slowConnect ? (
               <ConnectingState phase={phase} error={error} avatar={props.avatar} />
             ) : (
               (slots.emptyState ?? (
-                <div className="piloto-welcome mb-6 flex flex-col items-center gap-3 text-center">
-                  {props.avatar}
+                <div className="mb-6 flex flex-col items-center">
+                  {props.avatar && <div className="mb-3">{props.avatar}</div>}
                   {props.welcome && (
-                    // Un saludo largo (una explicación) va en letra de lectura; uno corto, en la de cartel.
-                    <div className="piloto-welcome-text" data-long={typeof props.welcome === "string" && props.welcome.length > 60 ? "" : undefined}>
+                    // Un saludo largo (una explicación del copiloto) baja a letra de lectura.
+                    <h1
+                      className={
+                        typeof props.welcome === "string" && props.welcome.length > 60
+                          ? "max-w-xl text-center text-base font-medium leading-6 text-metal"
+                          : "text-center text-3xl font-extrabold tracking-tight text-dark"
+                      }
+                    >
                       {props.welcome}
-                    </div>
+                    </h1>
                   )}
                 </div>
               ))
@@ -379,11 +392,10 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
               {composer}
               {props.suggestions && <Suggestions items={props.suggestions} onPick={(s) => send(s)} onPrefill={(s) => setDraftState((d) => ({ text: s, n: d.n + 1 }))} />}
             </div>
-            </div>
           </div>
         ) : (
           <>
-            {slots.headerActions && <div className="flex shrink-0 justify-end gap-2 px-4 pt-3">{slots.headerActions}</div>}
+            {slots.headerActions && <div className="flex shrink-0 justify-end gap-2 px-4 pt-3 sm:px-6">{slots.headerActions}</div>}
             <div
               ref={scroller}
               onScroll={onScroll}
@@ -396,9 +408,9 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
                 if (touchY.current != null && y != null && y > touchY.current + 4) release();
               }}
               onKeyDown={(e) => ["ArrowUp", "PageUp", "Home"].includes(e.key) && release()}
-              className="piloto-scroll relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
+              className="gs-scroll relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
             >
-              <div ref={column} className="piloto-column mx-auto flex w-full flex-col gap-6 px-4 py-6">
+              <div ref={column} className="mx-auto flex w-full max-w-[784px] flex-col gap-6 px-4 py-8 sm:px-6">
                 {turns.map((turn, i) => {
                   const isLast = i === turns.length - 1;
                   const live = busy && isLast;
@@ -414,6 +426,7 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
                           onOption={isLast && !busy && features.replyOptions !== false ? (text) => send(text) : undefined}
                           showUsage={features.usage !== false}
                           showCopy={features.copy !== false}
+                          showDuration={features.duration !== false}
                           renderDeliveries={slots.renderDeliveries}
                         />
                       )}
@@ -429,25 +442,25 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
                 )}
                 {/* El turno se cortó por falla del servidor: en primera persona y con salida. */}
                 {interrupted && !busy && (
-                  <p className="piloto-interrupted text-sm text-text-secondary">
+                  <p className="text-sm text-text-secondary">
                     {/me quedé a medias|i stopped halfway/i.test(last?.text ?? "") ? t.interruptedOurFault : t.interrupted(interrupted.reason)}{" "}
                     <button type="button" onClick={pilot.resume} className="cursor-pointer text-text-primary underline underline-offset-2">
                       {interrupted.canContinue ? t.continueTurn : t.resume}
                     </button>
                   </p>
                 )}
-                {notice && <p className="piloto-notice text-sm text-text-tertiary">{notice}</p>}
-                {error && <p className="piloto-error text-sm text-text-danger">{error}</p>}
+                {notice && <p className="text-sm text-text-tertiary">{notice}</p>}
+                {error && <p className="text-sm text-text-danger">{error}</p>}
               </div>
               <div ref={spacer} aria-hidden />
             </div>
-            <div className="piloto-dock relative mx-auto w-full px-4 pb-4">
+            <div className="relative mx-auto w-full max-w-[784px] px-4 pb-4 sm:px-6 sm:pb-6">
               {!atBottom && (
                 <button
                   type="button"
                   onClick={toBottom}
                   aria-label={t.goToLatest}
-                  className="piloto-to-bottom absolute -top-12 left-1/2 z-10 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-full border border-border-primary bg-background-secondary text-text-secondary shadow-(--piloto-shadow-card) transition hover:text-text-primary"
+                  className="absolute -top-12 left-1/2 z-10 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-full border border-border-primary bg-background-secondary text-text-secondary shadow-lg transition hover:text-text-primary"
                 >
                   <ArrowDown className="h-4 w-4" />
                 </button>

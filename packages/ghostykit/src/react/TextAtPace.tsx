@@ -112,7 +112,7 @@ export function useChunkRegistry(): Registry {
 
 type Node = { type: string; tagName?: string; value?: string; children?: Node[]; properties?: Record<string, unknown> };
 const UNTOUCHED = new Set(["pre", "code", "svg", "math", "script", "style"]);
-const STYLE = `piloto-chunk ${CHUNK_MS}ms linear both`;
+const STYLE = `gs-tramo ${CHUNK_MS}ms linear both`;
 
 /** Rehype: parte los textos del bloque en spans, uno por tramo. */
 function chunksPlugin(state: { chunks: Chunk[]; total: number }) {

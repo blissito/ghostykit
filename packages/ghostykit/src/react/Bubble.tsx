@@ -1,6 +1,8 @@
-// Las burbujas del hilo: la del usuario (texto, imágenes, nota de voz, documentos) y la del agente
-// (pensamiento, pasos, narración, respuesta al ritmo, opciones, entregas, uso y pie).
-import { ArrowUpRight, Check, Coins, Copy, FileText, Gauge, RotateCcw } from "lucide-react";
+// Las burbujas del hilo. PORTADAS de Ghosty Studio (`Bubble` de `ChatView.tsx`, `TurnFooter.tsx`,
+// `OpcionesDeRespuesta.tsx`, `MessageUsageStats.tsx`) con el MISMO markup y clases. Lo propio de
+// Ghosty (páginas, PDFs, imágenes, documentos, capturas, subagentes) no está aquí: va por el slot
+// `renderDeliveries`.
+import { ArrowUpRight, Check, Coins, Copy, Gauge, RotateCcw } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { splitNarration } from "../core/narration";
 import { cleanReplyOption, extractReplyOptions, type ReplyOptions } from "../core/options";
@@ -12,14 +14,15 @@ import { Markdown } from "./Markdown";
 import { AgentSteps, Narration } from "./Steps";
 import { useTextAtPace } from "./TextAtPace";
 
-async function copyText(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    // Sin permiso de portapapeles no hay nada que hacer, y avisar de eso no ayuda.
-    return false;
-  }
+/** La prosa de la respuesta, al ritmo de claude.ai mientras el turno vive. */
+function AnswerText({ text, live, whole = false }: { text: string; live: boolean; whole?: boolean }) {
+  const { visible, animate } = useTextAtPace(text, live, whole);
+  if (!visible) return null;
+  return (
+    <div className="gs-prosa">
+      <Markdown animate={animate}>{visible}</Markdown>
+    </div>
+  );
 }
 
 export function UserBubble({ turn }: { turn: Turn }) {
@@ -29,7 +32,7 @@ export function UserBubble({ turn }: { turn: Turn }) {
     // Turno abierto por la plataforma (tarea programada, entrega): línea de sistema, no burbuja.
     return (
       <div className="flex justify-center">
-        <span className="piloto-system-note max-w-[80%] truncate rounded-full bg-background-secondary px-3 py-1 text-[11px] text-text-tertiary">⏰ {note}</span>
+        <span className="max-w-[80%] truncate rounded-full bg-background-secondary px-3 py-1 text-[11px] text-text-tertiary">⏰ {note}</span>
       </div>
     );
   }
@@ -39,26 +42,26 @@ export function UserBubble({ turn }: { turn: Turn }) {
   const inBubble = atts.filter((a) => (a.mimeType.startsWith("image/") && (a.data || a.uri)) || (a.mimeType.startsWith("audio/") && a.uri));
   const docs = atts.filter((a) => !inBubble.includes(a));
   return (
-    <div className="piloto-user group/msg flex flex-col items-end gap-1">
+    <div className="group/msg flex flex-col items-end gap-1">
       {turn.steer && <span className="text-[11px] text-text-tertiary">↪ {t.steered}</span>}
       {docs.length > 0 && (
         <div className="mb-1 flex max-w-[75%] flex-wrap justify-end gap-2">
           {docs.map((a, i) => (
-            <span key={i} className="piloto-attachment-card inline-flex max-w-[16rem] items-center gap-1.5 rounded-(--piloto-radius-input) border border-border-primary bg-background-primary px-2.5 py-1.5 text-xs text-text-secondary">
-              <FileText className="h-3.5 w-3.5 shrink-0" />
-              {a.uri ? (
-                <a href={a.uri} target="_blank" rel="noopener noreferrer" className="truncate hover:underline">
-                  {a.name ?? a.mimeType}
-                </a>
-              ) : (
-                <span className="truncate">{a.name ?? a.mimeType}</span>
-              )}
-            </span>
+            <a
+              key={i}
+              href={a.uri}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex max-w-[16rem] items-center gap-1.5 rounded-lg border border-border-primary px-2 py-1 text-xs text-text-tertiary"
+            >
+              <span aria-hidden>📄</span>
+              <span className="truncate">{a.name ?? a.mimeType}</span>
+            </a>
           ))}
         </div>
       )}
       {(inBubble.length > 0 || visible.trim()) && (
-        <div className="piloto-bubble-user max-w-[75%] whitespace-pre-wrap break-words rounded-(--piloto-radius-bubble) px-4 py-3 text-[15px] leading-[22px]">
+        <div className="gc-msg-user max-w-[75%] whitespace-pre-wrap break-words rounded-(--piloto-radius-bubble) bg-(--piloto-user-bubble) px-4 py-3 font-sans text-base leading-[22px] text-(--piloto-user-text)">
           {inBubble.length > 0 && (
             <div className={`flex flex-wrap justify-end gap-1.5 ${visible.trim() ? "mb-2" : ""}`}>
               {inBubble.map((a, i) =>
@@ -86,14 +89,17 @@ export function CopyUserMessage({ text }: { text: string }) {
     <button
       type="button"
       onClick={async () => {
-        if (await copyText(text)) {
+        try {
+          await navigator.clipboard.writeText(text);
           setCopied(true);
           setTimeout(() => setCopied(false), 1500);
+        } catch {
+          /* sin portapapeles: el texto sigue seleccionable */
         }
       }}
       aria-label={copied ? t.copied : t.copyMessage}
       title={copied ? t.copied : t.copy}
-      className={`piloto-copy-user grid h-7 w-7 place-items-center rounded-md text-text-tertiary transition-opacity hover:bg-background-secondary hover:text-text-primary focus-visible:opacity-100 [@media(hover:none)]:opacity-100 ${
+      className={`grid h-7 w-7 place-items-center rounded-md text-text-tertiary transition-opacity hover:bg-black/5 hover:text-text-primary focus-visible:opacity-100 [@media(hover:none)]:opacity-100 ${
         copied ? "opacity-100" : "opacity-0 group-hover/msg:opacity-100"
       }`}
     >
@@ -102,26 +108,19 @@ export function CopyUserMessage({ text }: { text: string }) {
   );
 }
 
-/** La prosa de la respuesta, al ritmo de claude.ai mientras el turno vive. */
-function AnswerText({ text, live, whole = false }: { text: string; live: boolean; whole?: boolean }) {
-  const { visible, animate } = useTextAtPace(text, live, whole);
-  if (!visible) return null;
-  return <Markdown animate={animate}>{visible}</Markdown>;
-}
-
 /** Las opciones finales de la última respuesta como botones: un clic las manda como tu mensaje. */
 export function ReplyOptionButtons({ options, onPick }: { options: ReplyOptions; onPick: (text: string) => void }) {
   const { strings: t } = usePiloto();
   return (
-    <ul className="piloto-options mt-3 flex flex-col gap-2" aria-label={t.replyOptions}>
+    <ul className="mt-3 flex flex-col gap-2" aria-label={t.replyOptions}>
       {options.items.map((item, i) => {
         const clean = cleanReplyOption(item);
         return (
-          <li key={i} className="piloto-chunk-in">
+          <li key={i} style={{ animation: "gs-tramo 400ms linear both" }}>
             <button
               type="button"
               onClick={() => onPick(clean)}
-              className="piloto-option group flex w-full cursor-pointer items-center gap-3 rounded-(--piloto-radius-input) border border-border-primary bg-background-primary px-4 py-2.5 text-left text-sm text-text-primary transition-colors hover:border-brand-300 hover:bg-background-secondary"
+              className="group flex w-full cursor-pointer items-center gap-3 rounded-xl border border-border-primary bg-background-primary px-4 py-2.5 text-left font-sans text-sm text-text-primary transition-colors hover:border-brand-300 hover:bg-background-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
             >
               {options.numbered && <span className="shrink-0 tabular-nums text-text-tertiary">{i + 1}.</span>}
               <span className="min-w-0 flex-1">{clean}</span>
@@ -140,7 +139,7 @@ export function UsageStats({ used, size, cost }: Usage) {
   if (!used && !cost) return null;
   const pct = size > 0 ? Math.min(100, Math.round((used / size) * 100)) : 0;
   return (
-    <div className="piloto-usage mt-2 flex items-center gap-4 text-[11px] text-text-tertiary">
+    <div className="mt-2 flex items-center gap-4 text-[11px] text-text-tertiary">
       <span className="flex items-center gap-1">
         <Gauge className="h-3 w-3" />
         {used.toLocaleString(t.numberLocale)}
@@ -157,19 +156,22 @@ export function UsageStats({ used, size, cost }: Usage) {
 }
 
 /** El pie de una respuesta terminada: cuánto tardó, copiar y reintentar. */
-export function TurnFooter({ text, seconds, onRetry, showCopy = true }: { text: string; seconds?: number; onRetry?: () => void; showCopy?: boolean }) {
+export function TurnFooter({ text, seconds, onRetry, showCopy = true, showDuration = true }: { text: string; seconds?: number; onRetry?: () => void; showCopy?: boolean; showDuration?: boolean }) {
   const { strings: t } = usePiloto();
   const [copied, setCopied] = useState(false);
   return (
-    <div className="piloto-footer mt-2 flex items-center gap-3 text-xs text-text-tertiary">
-      {seconds ? <span>{t.worked(seconds)}</span> : null}
+    <div className="mt-2 flex items-center gap-3 text-xs text-text-tertiary">
+      {seconds && showDuration ? <span>{t.worked(seconds)}</span> : null}
       {showCopy && (
         <button
           type="button"
           onClick={async () => {
-            if (await copyText(text)) {
+            try {
+              await navigator.clipboard.writeText(text);
               setCopied(true);
               setTimeout(() => setCopied(false), 1500);
+            } catch {
+              /* sin permiso de portapapeles */
             }
           }}
           className="flex items-center gap-1 transition-colors hover:text-text-primary"
@@ -195,8 +197,8 @@ export function DeliveryChips({ deliveries }: { deliveries: Delivery[] }) {
   return (
     <div className="mt-2 flex flex-wrap gap-1.5">
       {shown.map((d, i) => (
-        <span key={i} className="piloto-delivery inline-flex max-w-[16rem] items-center gap-1.5 rounded-(--piloto-radius-input) border border-border-primary px-2 py-1 text-xs text-text-secondary">
-          <FileText className="h-3.5 w-3.5 shrink-0" />
+        <span key={i} className="inline-flex max-w-[16rem] items-center gap-1.5 rounded-lg border border-border-primary px-2 py-1 text-xs text-text-tertiary">
+          <span aria-hidden>📄</span>
           <span className="truncate">{d.name}</span>
         </span>
       ))}
@@ -213,19 +215,21 @@ export interface AgentBubbleProps {
   onOption?: (text: string) => void;
   showUsage?: boolean;
   showCopy?: boolean;
+  showDuration?: boolean;
   /** Las entregas (y lo que la app quiera bajo la respuesta). Sin esto, fichas simples. */
   renderDeliveries?: (turn: Turn, live: boolean) => ReactNode;
 }
 
-export function AgentBubble({ turn, live, onRetry, onOption, showUsage = true, showCopy = true, renderDeliveries }: AgentBubbleProps) {
+export function AgentBubble({ turn, live, onRetry, onOption, showUsage = true, showCopy = true, showDuration = true, renderDeliveries }: AgentBubbleProps) {
   const { strings: t } = usePiloto();
   const narrated = splitNarration(turn.text ?? "", turn.cuts);
   const visible = narrated.rest;
+  // «Si quieres, puedo: …» al final de la última respuesta → botones.
   const options = onOption && !live && visible ? extractReplyOptions(visible) : null;
   return (
-    <div className="piloto-agent min-w-0 max-w-[92%]">
+    <div className="gc-msg-agent min-w-0 max-w-[90%]">
       {turn.thought && (
-        <details className="piloto-thought mb-3 text-xs text-text-secondary">
+        <details className="mb-3 text-xs text-text-secondary">
           <summary className="cursor-pointer select-none">{t.thinking}</summary>
           <p className="mt-2 whitespace-pre-wrap border-l-2 border-border-secondary pl-3">{turn.thought}</p>
         </details>
@@ -238,14 +242,13 @@ export function AgentBubble({ turn, live, onRetry, onOption, showUsage = true, s
           <ReplyOptionButtons options={options} onPick={onOption!} />
         </>
       ) : (
-        // Cada tramo nuevo tras una herramienta monta su propio ritmo (empieza de cero). Lo que llegó
-        // entero fuera de un turno se escribe al mismo ritmo; al recargar ya sale completo.
+        // Cada tramo nuevo tras una herramienta monta su propio ritmo (empieza de cero).
         visible && <AnswerText key={`r${narrated.steps.length}`} text={visible} live={live || !!turn.arrived} whole={!!turn.arrived} />
       )}
       {renderDeliveries ? renderDeliveries(turn, live) : turn.deliveries?.length ? <DeliveryChips deliveries={turn.deliveries} /> : null}
       {turn.decisions?.length ? <DecisionLines decisions={turn.decisions} /> : null}
       {showUsage && turn.usage && <UsageStats {...turn.usage} />}
-      {turn.text && !live && <TurnFooter text={turn.text} seconds={turn.seconds} onRetry={onRetry} showCopy={showCopy} />}
+      {turn.text && !live && <TurnFooter text={turn.text} seconds={turn.seconds} onRetry={onRetry} showCopy={showCopy} showDuration={showDuration} />}
     </div>
   );
 }

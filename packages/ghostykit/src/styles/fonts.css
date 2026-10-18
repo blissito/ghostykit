@@ -1,3 +1,3 @@
-/* Opcional: las fuentes de las pieles de casa (Schibsted Grotesk para leer, Big Shoulders Stencil
-   para el reloj y el sello del pase). Sin esto, Piloto cae a las fuentes del sistema. */
-@import url("https://fonts.googleapis.com/css2?family=Big+Shoulders+Stencil+Display:wght@700;800;900&family=Schibsted+Grotesk:ital,wght@0,400..900;1,400..900&display=swap");
+/* Opcional: las fuentes de las pieles de casa — Inter (la de Ghosty) y Big Shoulders Stencil (el
+   reloj y el sello del pase de permiso). Sin esto, Piloto cae a las fuentes del sistema. */
+@import url("https://fonts.googleapis.com/css2?family=Big+Shoulders+Stencil+Display:wght@800;900&family=Inter:opsz,wght@14..32,400..800&display=swap");

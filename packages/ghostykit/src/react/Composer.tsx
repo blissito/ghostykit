@@ -367,16 +367,16 @@ export function Composer({
   };
 
   const canSend = Boolean(value.trim() || files.length > 0 || references.length > 0);
-  const iconButton =
-    "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-background-secondary hover:text-text-primary disabled:opacity-30";
 
+  // ── PORTADO de `ChatInputCard` + `ChatInput` de Ghosty Studio: mismo markup y clases. Lo que era
+  // de Ghosty (biblioteca de archivos, programar, conectores, navegador, tareas, plan) va por `extras`.
   return (
-    <div className="piloto-composer rounded-(--piloto-radius-input)">
-      <div className="flex flex-col gap-2 p-3">
+    <div className="gc-input rounded-(--piloto-radius-input) border-(length:--piloto-border-width) border-outlines bg-(--piloto-composer-bg) shadow-(--piloto-shadow-input) transition-colors focus-within:border-brand-300">
+      <div className={`flex flex-col gap-2 p-3 transition-shadow ${withFiles && dragging ? "rounded-2xl bg-background-secondary/40 ring-2 ring-inset ring-ring-info" : ""}`}>
         {withFiles && dragging && (
-          <div className="piloto-drop pointer-events-none fixed inset-0 z-[1000] flex items-center justify-center p-6">
-            <div className="flex flex-col items-center gap-2 rounded-(--piloto-radius-card) border-2 border-dashed border-brand-500 bg-background-primary px-10 py-8 text-center shadow-(--piloto-shadow-card)">
-              <Paperclip className="size-7 text-brand-600" />
+          <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-background-primary/80 p-6 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-2 rounded-3xl border-2 border-dashed border-brand-500 bg-background-primary px-10 py-8 text-center shadow-lg">
+              <Paperclip className="size-7 text-brand-500" />
               <p className="text-base font-semibold text-text-primary">{t.dropFiles}</p>
               <p className="text-xs text-text-secondary">{t.dropHint}</p>
             </div>
@@ -399,7 +399,7 @@ export function Composer({
             {files.length > 1 ? t.uploadingN(files.length) : t.uploading}
           </p>
         )}
-        {files.length > 0 && (
+        {withFiles && files.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {files.map((a) => (
               <div key={a.id} className="relative h-16 w-16 overflow-hidden rounded-lg border border-border-primary bg-background-secondary">
@@ -417,7 +417,7 @@ export function Composer({
                   type="button"
                   onClick={() => removeFile(a.id)}
                   aria-label={t.removeAttachment}
-                  className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-background-inverse/80 text-text-inverse shadow-sm transition-colors hover:bg-background-inverse"
+                  className="absolute top-0.5 right-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-background-inverse/80 text-text-inverse shadow-sm transition-colors hover:bg-background-inverse"
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -436,11 +436,12 @@ export function Composer({
                 recRef.current?.stop();
               }}
               aria-label={t.cancelVoice}
+              title={t.cancelVoice}
               className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-text-secondary hover:bg-background-secondary hover:text-text-primary"
             >
               <X className="h-4 w-4" />
             </button>
-            <span className="piloto-rec-dot h-2 w-2 shrink-0 rounded-full" />
+            <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-red-500" />
             <span className="w-10 shrink-0 font-mono text-xs tabular-nums text-text-secondary">
               {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}
             </span>
@@ -449,7 +450,13 @@ export function Composer({
                 <span key={i} className="w-[3px] shrink-0 rounded-full bg-text-secondary/70" style={{ height: `${Math.max(3, Math.round(v * 22))}px` }} />
               ))}
             </div>
-            <button type="button" onClick={toggleRecording} aria-label={t.stopAndSendVoice} className="piloto-send flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
+            <button
+              type="button"
+              onClick={toggleRecording}
+              aria-label={t.stopAndSendVoice}
+              title={t.send}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-500 text-white hover:bg-brand-600"
+            >
               <ArrowUp className="h-4 w-4" />
             </button>
           </div>
@@ -470,11 +477,11 @@ export function Composer({
                 onRemoveReference?.(references[references.length - 1].id);
               }
             }}
-            className="piloto-textarea max-h-60 min-h-[24px] w-full flex-none resize-none overflow-y-auto bg-transparent px-1 text-sm leading-6 text-text-primary outline-none placeholder:text-text-tertiary"
+            className="max-h-60 min-h-[24px] w-full flex-none resize-none overflow-y-auto bg-transparent px-1 text-sm leading-6 text-text-primary outline-none placeholder:text-text-tertiary"
           />
         )}
         <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
+          <div className="@container flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
             {withFiles && (
               <>
                 {/* Dos botones: «imagen» depende de que el modelo VEA; «archivo», no. */}
@@ -488,10 +495,12 @@ export function Composer({
                   disabled={busy || !canSeeImages || files.length >= maxFiles}
                   aria-label={canSeeImages ? t.attachImage : t.noImages}
                   title={canSeeImages ? t.attachImage : t.noImages}
-                  className={iconButton}
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-background-secondary hover:text-text-primary disabled:opacity-30"
                 >
                   <ImageIcon className="h-4 w-4" />
                 </button>
+                {/* Lo propio de la app (en Ghosty, «Mis archivos») va entre imagen y archivo. */}
+                {extras}
                 <button
                   type="button"
                   onClick={() => {
@@ -502,20 +511,27 @@ export function Composer({
                   disabled={busy || files.length >= maxFiles}
                   aria-label={t.attachFile}
                   title={t.attachFile}
-                  className={iconButton}
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-background-secondary hover:text-text-primary disabled:opacity-40"
                 >
                   <Paperclip className="h-4 w-4" />
                 </button>
               </>
             )}
-            {extras}
+            {!withFiles && extras}
             {models.length > 0 && onModelChange && <ModelPicker models={models} current={currentModel} onChange={onModelChange} />}
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
-            {/* El micrófono junto a «Enviar», como en WhatsApp: es una forma de mandar. */}
+            {/* El micrófono junto a «Enviar», como en la app y en WhatsApp: es una forma de mandar. */}
             {canRecord && !recording && (
-              <button type="button" onClick={toggleRecording} disabled={busy || transcribing} aria-label={t.recordVoice} title={t.voiceNote} className={`${iconButton} h-8 w-8`}>
-                {transcribing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mic className="h-4 w-4" />}
+              <button
+                type="button"
+                onClick={toggleRecording}
+                disabled={busy || transcribing}
+                aria-label={t.recordVoice}
+                title={t.voiceNote}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-background-secondary hover:text-text-primary disabled:opacity-40"
+              >
+                {transcribing ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Mic className="h-4 w-4" />}
               </button>
             )}
             <button
@@ -523,8 +539,9 @@ export function Composer({
               onClick={busy ? onStop : () => void submit()}
               disabled={(!busy && !canSend) || uploading}
               aria-label={busy ? t.stop : uploading ? t.uploading : t.send}
-              data-ready={busy || canSend || uploading || undefined}
-              className="piloto-send flex h-8 w-8 items-center justify-center rounded-full transition-colors"
+              className={`gc-send flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
+                busy || canSend || uploading ? "bg-brand-500 text-white hover:bg-brand-600" : "bg-background-disabled text-text-disabled"
+              }`}
             >
               {busy ? <Square className="h-3 w-3 fill-current" /> : uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
             </button>
@@ -535,7 +552,10 @@ export function Composer({
   );
 }
 
-/** El selector de modelo: un menú corto hacia arriba, sin Radix. Cierra con clic fuera y Escape. */
+/**
+ * El selector de modelo. PORTADO de Ghosty (`ModelPicker.tsx`): dropdown discreto hacia arriba, sin
+ * Radix; cierra con clic fuera y con Escape.
+ */
 export function ModelPicker({ models, current, onChange }: { models: ModelOption[]; current: string | null; onChange: (value: string) => void }) {
   const { strings: t } = usePiloto();
   const [open, setOpen] = useState(false);
@@ -553,7 +573,7 @@ export function ModelPicker({ models, current, onChange }: { models: ModelOption
       document.removeEventListener("keydown", escape);
     };
   }, [open]);
-  if (!models.length) return null;
+  if (models.length === 0) return null;
   const active = models.find((m) => m.value === current) ?? null;
   return (
     <div ref={box} className="relative">
@@ -561,14 +581,15 @@ export function ModelPicker({ models, current, onChange }: { models: ModelOption
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="flex max-w-56 items-center gap-1.5 rounded-full border border-border-primary px-2.5 py-1 text-xs text-text-secondary transition-colors hover:bg-background-secondary hover:text-text-primary"
+        className="flex max-w-56 items-center gap-1.5 rounded-full border border-border-primary px-2.5 py-1 text-xs text-text-secondary transition-colors outline-none hover:bg-background-secondary hover:text-text-primary"
       >
         <Cpu className="h-3.5 w-3.5 shrink-0" />
         <span className="truncate">{active?.name ?? t.model}</span>
         <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />
       </button>
       {open && (
-        <div className="piloto-menu absolute bottom-full left-0 z-20 mb-1 max-h-80 min-w-52 overflow-y-auto rounded-(--piloto-radius-input) border border-border-primary bg-background-primary py-1 shadow-(--piloto-shadow-card)">
+        // Hacia ARRIBA: el selector vive pegado al borde inferior del input.
+        <div className="absolute bottom-full left-0 z-20 mb-1 max-h-80 min-w-52 overflow-y-auto rounded-xl border border-border-primary bg-background-primary py-1 shadow-lg">
           {models.map((m) => (
             <button
               key={m.value}

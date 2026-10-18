@@ -7,6 +7,9 @@ describe("SSR", () => {
   it("renderiza vacío con defaults y con el hilo guardado", () => {
     const empty = renderToString(<Piloto transport={null} welcome="Hola" suggestions={["Uno"]} />);
     expect(empty).toContain('class="piloto ');
+    // El composer es el de Ghosty: misma tarjeta (`gc-input`) y mismo botón (`gc-send`).
+    expect(empty).toContain("gc-input");
+    expect(empty).toContain("gc-send");
     expect(empty).toContain("Hola");
     const thread = renderToString(
       <Piloto
@@ -46,7 +49,7 @@ describe("0.2.1 — lo que encontró el primer adoptante", () => {
 
   it("un saludo largo va en letra de lectura", () => {
     const html = renderToString(<Piloto transport={null} welcome={"Pregúntame por qué falló un cron, cuándo corre o qué pasó en sus últimas corridas."} />);
-    expect(html).toMatch(/piloto-welcome-text" data-long=""/);
-    expect(html).toContain('class="piloto-empty"');
+    expect(html).toContain("max-w-xl text-center text-base font-medium");
+    expect(html).toContain("[justify-content:safe_center]");
   });
 });
