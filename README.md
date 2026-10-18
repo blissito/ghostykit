@@ -22,6 +22,8 @@ before anything risky** (human in the loop).
 - **The composer**: attachments (you provide `upload`), voice notes (you provide `transcribe`), stop, model picker and reply-option buttons.
 - **Solid core**: the whole chat state is a pure reducer, `reducePilotEvent(state, name, data)`, tested by replaying real SSE sessions.
 
+> **En español:** Piloto UI le da a tu app un copiloto completo con un solo componente. Tus usuarios ven la respuesta escribirse en vivo y cada paso del agente («Leí 2 archivos»), y aprueban o rechazan cualquier acción riesgosa con una tarjeta antes de que ocurra. El agente sabe qué pantalla y qué registro está viendo la persona. El chat se recupera solo de cortes de red y de deploys sin perder el turno, y trae adjuntos, notas de voz y botón para detener. Por dentro, todo el estado es una función pura probada con sesiones reales, así que se puede actualizar sin miedo.
+
 ## 30-second quickstart
 
 ```bash
