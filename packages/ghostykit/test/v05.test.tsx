@@ -524,3 +524,64 @@ describe("run cortado por el servidor (metadata.interrupted) y «Continuar»", (
     expect(bare).toContain("La respuesta se cortó antes de terminar.");
   });
 });
+
+describe("ghosty.stalled, metadata.truncated, attachments_failed, steer:true y run_not_live", () => {
+  it("stalled se pinta hasta que llega algo nuevo y no queda en el turno", () => {
+    let s = run(beginSend(createPilotState(), "hola", [], 1), [
+      { type: "RUN_STARTED", runId: "r" },
+      { type: "TEXT_MESSAGE_CONTENT", messageId: "a", delta: "Voy" },
+      { type: "CUSTOM", name: "ghosty.stalled", value: {} },
+    ]);
+    expect(s.stalled).toEqual({});
+    expect(s.turns[1].custom).toBeUndefined();
+    const html = renderToString(<Piloto transport={null} pilot={{ state: s, threadId: "t", canSteer: false, loadingOlder: false } as unknown as Pilot} />);
+    expect(html).toContain("Se atoró, sigo intentando…");
+    s = run(s, [{ type: "TEXT_MESSAGE_CONTENT", messageId: "a", delta: "…" }]);
+    expect(s.stalled).toBeNull();
+  });
+
+  it("metadata.truncated marca la respuesta y se avisa bajo ella; los adjuntos fallidos dicen su razón", () => {
+    const s = run(beginSend(createPilotState(), "lee esto", [], 1), [
+      { type: "RUN_STARTED", runId: "r" },
+      { type: "CUSTOM", name: "ghosty.attachments_failed", value: { files: [{ name: "scan.pdf", reason: "está protegido con contraseña" }] } },
+      { type: "TEXT_MESSAGE_CONTENT", messageId: "a", delta: "Texto largo" },
+      { type: "RUN_FINISHED", runId: "r", outcome: { type: "success" }, metadata: { truncated: true } },
+    ]);
+    expect(s.turns[1].truncated).toEqual({});
+    const html = renderToString(<Piloto transport={null} pilot={{ state: s, threadId: "t", canSteer: false, loadingOlder: false } as unknown as Pilot} />);
+    expect(html).toContain("La respuesta quedó incompleta.");
+    expect(html).toContain("No pude leer scan.pdf: está protegido con contraseña");
+  });
+
+  it("un steer que llega tarde (409 run_not_live) sale como run normal", async () => {
+    const live = hanging();
+    const { transport, inputs } = scripted(
+      async (input, emit, signal) => {
+        emit({ type: "RUN_STARTED", runId: input.runId });
+        await live.wait(signal);
+      },
+      () => {
+        throw new PilotHttpError("Ese run ya terminó.", 409, "run_not_live");
+      },
+      (input, emit) => {
+        emit({ type: "RUN_STARTED", runId: input.runId });
+        emit({ type: "RUN_FINISHED", runId: input.runId, outcome: { type: "success" } });
+      },
+    );
+    const { pilot } = await mount(transport, { steer: true });
+    await act(async () => {
+      void pilot().send("hola");
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    await act(async () => {
+      void pilot().send("y otra");
+      await new Promise((r) => setTimeout(r, 10));
+    });
+    expect(inputs[1].forwardedProps.steer).toBe(inputs[0].runId);
+    expect(inputs[2]).toMatchObject({ messages: [{ content: "y otra" }] });
+    expect(inputs[2].forwardedProps.steer).toBeUndefined();
+    expect(pilot().state.turns.filter((t) => t.role === "user").map((t) => t.text)).toEqual(["hola", "y otra"]);
+    expect(pilot().state.busy).toBe(false);
+    live.release();
+  });
+});

@@ -98,6 +98,7 @@ How each one shows up in the chat:
 | `STATE_SNAPSHOT` / `STATE_DELTA` | Optional. The agent's shared state, given to the app as `pilot.state.agentState` (`STATE_DELTA` is an RFC 6902 JSON Patch over the last snapshot; a patch that doesn't apply is ignored until the next snapshot). Keys with meaning for the client: `caps.steer: true` turns on steer (§6), and `subagents.tasks` (below). |
 | `CUSTOM` | Kept in the turn as `turn.custom[]` (`{name, value, timestamp}`) for the app to draw (`renderDeliveries`), except the protocol ones in §7. |
 | `RUN_FINISHED` `usage` | Optional: tokens under the answer (`TokenUsage[]`: `[{model, inputTokens, outputTokens}]`). The cost, in USD, goes in `metadata.costUsd`. |
+| `RUN_FINISHED` `metadata.truncated` | Optional: `true` or `{reason}` when the backend cut the answer short (a length cap, a guard). A note under the answer says it is incomplete (`reason` if given). |
 | `RUN_ERROR` `{message, code?}` | The run ends here, with the message shown in red. Do **not** send `RUN_FINISHED` after it. |
 
 `TEXT_MESSAGE_CHUNK` and `TOOL_CALL_CHUNK` (the compact forms) are accepted too.
@@ -284,7 +285,9 @@ Example (Ghosty Studio): `GET /conversations/:sid/messages?format=agui&before=<s
   ```json
   { "threadId": "th_2f1c", "runId": "run_8b10", "messages": [ { "id": "msg_07", "role": "user", "content": "also check the purge" } ], "forwardedProps": { "steer": "run_8a77" } }
   ```
-  A user message without `steer` while a run is live gets `409 run_active`.
+  A user message without `steer` while a run is live gets `409 run_active`. `"steer": true` (no
+  id) means "the thread's live run", for a client that doesn't know its id. If that run already
+  ended, the backend answers `409 run_not_live` and the client sends the message as a normal run.
   The backend adds the message to that run (the agent reads it at its next step) and answers with
   the **rest of the live run**, as if reconnecting: `RUN_STARTED {runId: "run_8a77"}` →
   `CUSTOM ghosty.injected {messageId: "msg_07"}` → the run's events until its `RUN_FINISHED`. The
@@ -317,6 +320,7 @@ Example (Ghosty Studio): `GET /conversations/:sid/messages?format=agui&before=<s
 | `401` / `403` | Not signed in / not allowed | Shows `message`; the app may ask to sign in. |
 | `409` `{"error":"run_active"}` | A run is already going on this thread | Keeps the message, reconnects (§5) and sends it when the run ends. |
 | `409` `{"error":"interrupt_pending"}` | There are unanswered approvals | Keeps the message and reconnects (§5), which shows the cards; it goes out once they are answered and the run ends. |
+| `409` `{"error":"run_not_live"}` | `steer` for a run that already ended | Sends the message as a normal run. |
 | `409` `{"error":"nothing_to_continue"}` | `continueRun` for a run that can't be continued | Hides the Continue strip. |
 | `400` `{"error":"resume_incomplete"}` | A `resume` didn't answer every open interrupt | Never sent by this client: one `resume` always answers them all (§4). |
 | `402` `{"error":"quota_exceeded"}` | The plan's limit | Shows `message`. |
@@ -327,7 +331,7 @@ Example (Ghosty Studio): `GET /conversations/:sid/messages?format=agui&before=<s
 
 ## 7. Custom events
 
-All optional. Names starting with `ghosty.` are reserved for this list. The first five are part of
+All optional. Names starting with `ghosty.` are reserved for this list. The first six are part of
 the protocol, and the client handles them; they and `ghosty.page` are not kept in the turn. The rest are content: they
 go to `turn.custom[]` for the app to draw, and every event also reaches the app through `onEvent`.
 Unknown names (yours) are kept in the turn too.
@@ -337,13 +341,14 @@ Unknown names (yours) are kept in the turn too.
 | `ghosty.title` | `{ "title": "Monitor timeouts" }` | The backend named the thread (for a sidebar). |
 | `ghosty.history` | `{ "hasMoreBefore": true, "before": "<cursor>" }` | Sent right before `MESSAGES_SNAPSHOT`: there are older messages (§5). |
 | `ghosty.injected` | `{ "messageId": "msg_07" }` | A steer message entered the live run (§6). |
+| `ghosty.stalled` | `{ "message"? }` | The agent got stuck and the backend keeps trying. The chat shows `message` (or "Got stuck, still trying…") under the live answer until the next text or tool event. |
 | `ghosty.replace` | `{ "messageId"?, "content": "…" }` | The backend rewrote the answer (a guard, a compaction): `content` replaces the turn's final text, after its last step; the narration before stays. |
 | `ghosty.tool` | `{ "toolCallId", "title", "kind", "path"?, "detail"? }` | The localized label of a step, sent after its `TOOL_CALL_START`. `title` wins over the app's `toolVerbs`; `kind` picks the icon. |
 | `ghosty.delivery` | `{ "id", "messageId", "url", "tipo": "archivo"\|"artefacto", "subtipo"?, "nombre", "titulo"?, "contenido"?, "fileId"?, "sessionId"?, "docId"?, "mime"?, "size"?, "captura"? }` | The turn delivered a file or artifact; `messageId` is the answer it belongs to. **A signed URL, never base64.** Also stored in the message's `metadata.custom` (§5), including the pages `loadOlder` returns. |
 | `ghosty.page` | `{ "event": "…", … }` | A page-builder event (landings), many per run; re-sent when reconnecting to a live run. Read by the app through `onEvent`; not kept in the turn. |
 | `ghosty.ui` | `{ "action": "move" \| "open", … }` | The agent asks the app to do something on screen (move or open a board card). The app acts on it through `onEvent`. |
-| `ghosty.reply_to` | `{ "messageId": "…" }` | The answer replies to a specific earlier message. |
-| `ghosty.attachments_failed` | `{ "names": ["…"], "message": "…" }` | Attachments of the user's message the agent couldn't read; `message` is for people. |
+| `ghosty.reply_to` | `{ "messageIds": ["…"], "folded": true }` | The message quotes earlier ones (`messageIds`); `folded` = the quoted messages were folded into this one. Kept in the turn for the app to draw the quote. |
+| `ghosty.attachments_failed` | `{ "files": [ { "name": "scan.pdf", "reason": "…" } ], "message"? }` | Attachments of the user's message the agent couldn't read, each with a `reason` for people. The chat lists them under the answer. |
 
 ## 8. Checklist for a backend
 

@@ -31,7 +31,10 @@ export function createPilotState(turns: Turn[] = []): PilotState {
 
 /** Los `CUSTOM` que no se guardan en el turno: fontanería del protocolo, o flujos que la app lee
  *  por `onEvent` (`ghosty.page`: los eventos del constructor, muchos por run). */
-const NOT_IN_TURN = new Set(["ghosty.title", "ghosty.injected", "ghosty.history", "ghosty.tool", "ghosty.replace", "ghosty.page"]);
+const NOT_IN_TURN = new Set(["ghosty.title", "ghosty.injected", "ghosty.history", "ghosty.tool", "ghosty.replace", "ghosty.page", "ghosty.stalled"]);
+
+/** Lo que demuestra que el agente ya no está atorado. */
+const PROGRESS = new Set(["TEXT_MESSAGE_START", "TEXT_MESSAGE_CONTENT", "TEXT_MESSAGE_CHUNK", "TOOL_CALL_START", "TOOL_CALL_ARGS", "TOOL_CALL_CHUNK", "TOOL_CALL_RESULT", "REASONING_MESSAGE_CONTENT", "REASONING_MESSAGE_CHUNK", "RUN_STARTED"]);
 
 type Ev = { type: string; [k: string]: any };
 
@@ -237,7 +240,8 @@ function applySnapshot(s: PilotState, messages: Message[]): PilotState {
 
 /** Un evento AG-UI → estado nuevo. `now` se inyecta para que el reductor sea puro. */
 export function reduceAgUiEvent(prev: PilotState, e: Ev, now: number = Date.now()): PilotState {
-  const s: PilotState = prev.effects.length ? { ...prev, effects: [] } : prev;
+  let s: PilotState = prev.effects.length ? { ...prev, effects: [] } : prev;
+  if (s.stalled && PROGRESS.has(e.type)) s = { ...s, stalled: null };
   switch (e.type) {
     case "RUN_STARTED":
       return { ...s, busy: true, error: null, step: null, runId: e.runId ?? s.runId };
@@ -311,6 +315,10 @@ export function reduceAgUiEvent(prev: PilotState, e: Ev, now: number = Date.now(
     case "CUSTOM":
       if (e.name === "ghosty.title") return { ...s, effects: [{ type: "title", title: e.value?.title }] };
       if (e.name === "ghosty.history") return { ...s, historyNext: toHistory(e.value) };
+      if (e.name === "ghosty.stalled") {
+        const message = (e.value as { message?: unknown } | undefined)?.message;
+        return { ...s, stalled: typeof message === "string" && message ? { message } : {} };
+      }
       if (e.name === "ghosty.tool") {
         // El rótulo localizado del paso, puesto por el servidor.
         const v = (e.value ?? {}) as { toolCallId?: unknown; title?: unknown; kind?: unknown; path?: unknown; detail?: unknown };
@@ -351,7 +359,7 @@ function toHistory(v: unknown): HistoryPage | null {
 }
 
 function finish(s0: PilotState, e: Ev, now: number, failed = false): PilotState {
-  let s: PilotState = { ...s0, busy: false, step: null, openText: null };
+  let s: PilotState = { ...s0, busy: false, step: null, openText: null, stalled: null };
   const outcome = e.outcome as { type?: string; interrupts?: Interrupt[] } | undefined;
   const interrupted = outcome?.type === "interrupt" && Array.isArray(outcome.interrupts) && outcome.interrupts.length > 0;
   // Las tarjetas abiertas son las del último run: si terminó bien o se canceló, ya no hay.
@@ -383,7 +391,10 @@ function finish(s0: PilotState, e: Ev, now: number, failed = false): PilotState 
   const seconds = t0 ? Math.max(1, Math.round((now - t0) / 1000)) : undefined;
   const turns = [...s.turns];
   const last = turns[turns.length - 1];
-  if (last?.role === "assistant") turns[turns.length - 1] = { ...last, ...(seconds !== undefined ? { seconds } : {}), ...(usage ? { usage } : {}) };
+  // Respuesta recortada por el servidor (tope de largo, guardia): `true` o `{reason}`.
+  const tr = (e.metadata as { truncated?: unknown } | undefined)?.truncated;
+  const truncated = tr ? { ...(typeof (tr as { reason?: unknown }).reason === "string" ? { reason: (tr as { reason: string }).reason } : {}) } : undefined;
+  if (last?.role === "assistant") turns[turns.length - 1] = { ...last, ...(seconds !== undefined ? { seconds } : {}), ...(usage ? { usage } : {}), ...(truncated ? { truncated } : {}) };
   s = { ...s, turns, turnStartedAt: 0, ...(usage ? { usage } : {}) };
   // Abrir el hilo (sin turno de este cliente) no es «fin de turno».
   if (!t0) return s;

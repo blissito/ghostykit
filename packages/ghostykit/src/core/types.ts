@@ -104,6 +104,8 @@ export interface Turn {
   usage?: Usage;
   /** Lo que el usuario decidió en las tarjetas de este turno (sólo en vivo). */
   decisions?: Decision[];
+  /** El servidor recortó la respuesta (`RUN_FINISHED.metadata.truncated`); `reason` si la dio. */
+  truncated?: { reason?: string };
   /** Los `CUSTOM` del turno (p. ej. `ghosty.delivery`), para `renderDeliveries`. Del snapshot salen
    *  del campo `custom` de cada mensaje del asistente. */
   custom?: CustomEntry[];
@@ -170,6 +172,8 @@ export interface PilotState {
    * `reason` ya viene en palabras de persona. Se ofrece «Continuar».
    */
   cutRun?: { runId: string; reason?: string } | null;
+  /** El agente se atoró y el servidor sigue intentando (`CUSTOM ghosty.stalled`); se quita con lo siguiente que llegue. */
+  stalled?: { message?: string } | null;
   /** Mensajes en espera de que termine el run vivo (steer rechazado). */
   queued: QueuedMessage[];
   /** Lo que estaba en espera cuando la persona detuvo: regresa a la caja (`n` cambia en cada vez). */

@@ -64,6 +64,12 @@ export interface PilotStrings {
   continueRun: string;
   /** La franja, si el servidor no dio razón. */
   runCut: string;
+  /** `ghosty.stalled` sin mensaje propio. */
+  stalled: string;
+  /** Bajo una respuesta recortada por el servidor. */
+  truncated: string;
+  /** Un adjunto que el agente no pudo leer: nombre y razón. */
+  attachmentFailed: (name: string, reason?: string) => string;
   /** Bajo un mensaje que espera a que termine el run vivo. */
   queued: string;
   /** «2 agentes trabajando». */
@@ -150,6 +156,9 @@ export const STRINGS_ES: PilotStrings = {
   loadingOlder: "Cargando…",
   continueRun: "Continuar",
   runCut: "La respuesta se cortó antes de terminar.",
+  stalled: "Se atoró, sigo intentando…",
+  truncated: "La respuesta quedó incompleta.",
+  attachmentFailed: (name, reason) => (reason ? `No pude leer ${name}: ${reason}` : `No pude leer ${name}`),
   queued: "Se manda cuando termine",
   subagentsWorking: (n) => (n === 1 ? "1 agente trabajando" : `${n} agentes trabajando`),
   subagentsDone: (n) => (n === 1 ? "1 agente terminó" : `${n} agentes terminaron`),
@@ -232,6 +241,9 @@ export const STRINGS_EN: PilotStrings = {
   loadingOlder: "Loading…",
   continueRun: "Continue",
   runCut: "The answer was cut off before it finished.",
+  stalled: "Got stuck, still trying…",
+  truncated: "The answer is incomplete.",
+  attachmentFailed: (name, reason) => (reason ? `Couldn't read ${name}: ${reason}` : `Couldn't read ${name}`),
   queued: "Sends when this finishes",
   subagentsWorking: (n) => (n === 1 ? "1 agent working" : `${n} agents working`),
   subagentsDone: (n) => (n === 1 ? "1 agent finished" : `${n} agents finished`),

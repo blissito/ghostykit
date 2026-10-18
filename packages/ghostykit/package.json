@@ -1,6 +1,6 @@
 {
   "name": "ghostykit",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "Ghosty Autopilot \u2014 the autopilot chat for your React app, on AG-UI: works with LangGraph, Mastra, CrewAI or any AG-UI agent. Streaming text, agent steps, human approval cards (interrupt/resume), attachments and voice.",
   "type": "module",
   "main": "./dist/core/index.js",

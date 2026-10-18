@@ -28,7 +28,7 @@ import { AgentBubble, UserBubble } from "./Bubble";
 import { ReferenceChips, Suggestions } from "./Chips";
 import { Composer, type UploadResult } from "./Composer";
 import { ConfirmCard } from "./ConfirmCard";
-import { PilotoContext, rootProps, type MarkdownOptions, type PilotIcon, type PilotoConfig, type PilotTheme } from "./context";
+import { PilotoContext, rootProps, usePiloto, type MarkdownOptions, type PilotIcon, type PilotoConfig, type PilotTheme } from "./context";
 import { TypingDots, WaitLabel } from "./Status";
 import { STRINGS_EN, STRINGS_ES, type PilotStrings } from "./strings";
 import { usePilot, type Pilot, type UsePilotOptions } from "./usePilot";
@@ -457,9 +457,11 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
                           renderDeliveries={slots.renderDeliveries}
                         />
                       )}
+                      {turn.role === "assistant" && <TurnNotes turn={turn} />}
                     </div>
                   );
                 })}
+                {busy && state.stalled && <p className="text-sm text-text-tertiary">{state.stalled.message ?? t.stalled}</p>}
                 {state.queued.map((q, i) => (
                   // Esperan a que termine el run vivo (el servidor no los dejó entrar): salen solos.
                   <div key={`q${i}`} data-queued className="flex flex-col items-end gap-1 opacity-60">
@@ -512,5 +514,22 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
     </PilotoContext.Provider>
   );
 });
+
+/** Los avisos del servidor bajo una respuesta: adjuntos que no pudo leer y respuesta recortada. */
+function TurnNotes({ turn }: { turn: Turn }) {
+  const { strings: t } = usePiloto();
+  const failed = (turn.custom ?? [])
+    .filter((c) => c.name === "ghosty.attachments_failed")
+    .flatMap((c) => ((c.value as { files?: { name?: string; reason?: string }[] } | undefined)?.files ?? []).filter((f) => f?.name));
+  if (!failed.length && !turn.truncated) return null;
+  return (
+    <div data-turn-notes className="mt-1 flex flex-col gap-0.5 text-xs text-text-tertiary">
+      {failed.map((f, i) => (
+        <p key={i}>{t.attachmentFailed(f.name!, f.reason)}</p>
+      ))}
+      {turn.truncated && <p>{turn.truncated.reason ?? t.truncated}</p>}
+    </div>
+  );
+}
 
 export default Piloto;

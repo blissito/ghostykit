@@ -201,7 +201,7 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
       ctrl.current?.abort();
       const c = new AbortController();
       ctrl.current = c;
-      const steering = typeof input.forwardedProps?.steer === "string";
+      const steering = input.forwardedProps?.steer !== undefined && input.forwardedProps?.steer !== false;
       const userMsg = input.messages[0] as { content?: unknown } | undefined;
       // El run que se puede detener: el que este cliente arrancó (un steer se suma al que ya corre).
       if (!steering && (input.messages.length || input.resume?.length || input.forwardedProps?.continueRun)) liveRun.current = input.runId;
@@ -224,6 +224,19 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
       } catch (err) {
         if (c.signal.aborted) return;
         const code = err instanceof PilotHttpError ? err.code : undefined;
+        // El run al que se quería sumar ya terminó: el mensaje sale como run normal.
+        if (code === "run_not_live" && steering && userMsg) {
+          const { text } = fromUserMessage(userMsg.content);
+          let s = ref.current;
+          for (let i = s.turns.length - 1; i >= 0; i--) {
+            if (s.turns[i].role === "user" && s.turns[i].text === text) {
+              s = { ...s, turns: [...s.turns.slice(0, i), ...s.turns.slice(i + 1)] };
+              break;
+            }
+          }
+          commit({ ...s, busy: false, turnStartedAt: 0, effects: [] });
+          return sendNew(text, []);
+        }
         // Ya no había nada que continuar (otro cliente lo hizo, o el hilo siguió): la franja se va sin error.
         if (code === "nothing_to_continue") {
           liveRun.current = null;
@@ -291,8 +304,9 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
       if (!transportRef.current) return;
       if (ref.current.busy) {
         // Steer: el mensaje entra al run que corre (sólo texto).
-        const live = liveRun.current ?? ref.current.runId;
-        if (!steerOn() || !live || !text.trim() || attachments.length) return;
+        // Sin el id del run vivo, `steer: true` = «el run vivo del hilo».
+        const live = liveRun.current ?? ref.current.runId ?? true;
+        if (!steerOn() || !text.trim() || attachments.length) return;
         commit(beginSteer(ref.current, text));
         await runNow({ messages: [userMessage(text, [])], forwardedProps: { steer: live } });
         return;
