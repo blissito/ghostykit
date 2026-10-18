@@ -228,6 +228,24 @@ like ghosty.studio; 16 px in the others). Every color, radius, border width and 
 }
 ```
 
+The variables a host (or a widget owner, inside an iframe) usually overrides:
+
+| Variable | What it paints |
+|---|---|
+| `--piloto-font`, `--piloto-font-prose`, `--piloto-font-mono` | UI text, the answers' prose, code |
+| `--piloto-rem` | The size unit inside the chat (`1rem`) |
+| `--piloto-bg`, `--piloto-surface`, `--piloto-surface-2` | Background, cards and fields, hover/secondary |
+| `--piloto-text`, `--piloto-text-2`, `--piloto-text-3` | Text, secondary text, hints |
+| `--piloto-accent`, `--piloto-accent-strong`, `--piloto-accent-soft`, `--piloto-on-accent` | Brand color (buttons, focus, links), its pressed and soft tones, text on it |
+| `--piloto-user-bubble`, `--piloto-user-text` | The user's bubble |
+| `--piloto-composer-bg`, `--piloto-shadow-input` | The message box |
+| `--piloto-border`, `--piloto-border-width` | Borders |
+| `--piloto-radius-bubble`, `--piloto-radius-input`, `--piloto-radius-card`, `--piloto-radius-button` | Corners |
+| `--piloto-success`, `--piloto-danger`, `--piloto-warning`, `--piloto-warning-ink` | States, and the approval pass |
+
+Set them in your CSS on `.piloto`, or from a plugin with `vars` (e.g. the owner's theme of an
+embedded widget): `definePlugin({ name: "theme", vars: { "--piloto-accent": owner.color, "--piloto-radius-input": "8px" } })`.
+
 | Ghosty | EasyBits | Neutral |
 |---|---|---|
 | ![Ghosty skin](https://raw.githubusercontent.com/blissito/ghostykit/main/docs/screenshots/ghosty-light-mobile-2-permission.png) | ![EasyBits skin, dark](https://raw.githubusercontent.com/blissito/ghostykit/main/docs/screenshots/easybits-dark-mobile-2-permission.png) | ![Neutral skin](https://raw.githubusercontent.com/blissito/ghostykit/main/docs/screenshots/neutral-light-mobile-2-permission.png) |
