@@ -248,8 +248,20 @@ MESSAGES_SNAPSHOT {messages: [ …the last N messages… ]}
 The chat then shows "Load earlier messages". The app fetches them through its own read API, outside
 this endpoint, with the `loadOlder(before)` option. That option returns
 `{messages, hasMoreBefore, before}`: AG-UI messages, oldest first, ending right before the cursor.
-Pages start at a user message (never in the middle of a turn) and `before` is opaque to the client.
-A later snapshot keeps the loaded pages when it starts at a message the client already has.
+
+- `before` is opaque to the client: a string or a number (a sequence number works); the client hands
+  it back to `loadOlder` as a string.
+- The messages are the same as in the snapshot: stable ids, `toolCalls`, `tool` results, user
+  attachments as `image`/`document` parts with a (signed) URL, and `metadata.custom` with the turn's
+  deliveries and its steps' labels (`ghosty.tool`, applied to the step, not kept in the turn).
+- Pages and the snapshot's tail should start at a user message. If a page ends in the middle of an
+  answer, the client joins both halves into one turn, but a later snapshot can then no longer keep
+  the loaded pages.
+- A later snapshot keeps the loaded pages when it starts at a message the client already has.
+
+Example (Ghosty Studio): `GET /conversations/:sid/messages?format=agui&before=<seq>&limit=40` →
+`{messages, hasMoreBefore, before}`, wired as
+`loadOlder: (before) => fetch(url + "&before=" + before).then((r) => r.json())`.
 
 ## 6. Stopping and errors
 

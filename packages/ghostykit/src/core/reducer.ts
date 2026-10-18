@@ -119,6 +119,33 @@ function attachmentsOf(content: unknown): Attachment[] | undefined {
   return out.length ? out : undefined;
 }
 
+/** Los rótulos que puso el servidor (`ghosty.tool`) sobre los pasos del turno. */
+function toolLabel(t: Turn, v: unknown): void {
+  const x = (v ?? {}) as { toolCallId?: unknown; title?: unknown; kind?: unknown; path?: unknown; detail?: unknown };
+  if (typeof x.toolCallId !== "string") return;
+  const str = (y: unknown) => (typeof y === "string" && y ? y : undefined);
+  const patch: Partial<ToolEntry> = {};
+  if (str(x.title)) patch.label = str(x.title);
+  if (str(x.kind)) patch.kind = str(x.kind);
+  if (str(x.path)) patch.path = str(x.path);
+  if (str(x.detail)) patch.detail = str(x.detail);
+  t.tools = (t.tools ?? []).map((y) => (y.id === x.toolCallId ? { ...y, ...patch } : y));
+}
+
+/**
+ * Los `CUSTOM` guardados en `metadata.custom` de un mensaje: `ghosty.tool` rotula sus pasos; lo que
+ * es contenido (`ghosty.delivery`…) va a `turn.custom`; la fontanería del protocolo se descarta.
+ */
+function applyStoredCustom(t: Turn, m: Message): void {
+  const custom = (m as { metadata?: { custom?: CustomEntry[] } }).metadata?.custom;
+  if (!Array.isArray(custom)) return;
+  for (const c of custom) {
+    if (!c || typeof c.name !== "string") continue;
+    if (c.name === "ghosty.tool") toolLabel(t, c.value);
+    else if (!NOT_IN_TURN.has(c.name)) t.custom = [...(t.custom ?? []), c];
+  }
+}
+
 /**
  * El hilo guardado (mensajes AG-UI) como turnos: cada mensaje del usuario abre uno; lo que sigue del
  * asistente y de las herramientas se junta en un turno, con sus pasos y su narración.
@@ -140,19 +167,18 @@ export function messagesToTurns(messages: Message[]): Turn[] {
     } else if (m.role === "assistant") {
       const t = assistant();
       if (!t.id && m.id) t.id = m.id;
-      // Lo que el turno entregó (`CUSTOM ghosty.delivery`…) viaja en `metadata.custom` del mensaje.
-      const custom = (m as { metadata?: { custom?: CustomEntry[] } }).metadata?.custom;
-      if (Array.isArray(custom) && custom.length) t.custom = [...(t.custom ?? []), ...custom.filter((c) => c && typeof c.name === "string")];
       const text = m.content ?? "";
       if (text) t.text = t.text ? `${t.text}\n\n${text}` : text;
       for (const c of m.toolCalls ?? []) {
         t.tools = [...(t.tools ?? []), { id: c.id, title: c.function.name, status: "pending", args: c.function.arguments, detail: argsDetail(c.function.arguments) }];
         if (t.text.trim() && t.cuts?.[t.cuts.length - 1] !== t.text.length) t.cuts = [...(t.cuts ?? []), t.text.length];
       }
+      applyStoredCustom(t, m);
     } else if (m.role === "tool") {
       const t = assistant(m.id);
       const failed = Boolean((m as { error?: string }).error);
       t.tools = (t.tools ?? []).map((x) => (x.id === m.toolCallId ? { ...x, status: failed ? "failed" : "completed" } : x));
+      applyStoredCustom(t, m);
     } else if (m.role === "reasoning") {
       const t = assistant(m.id);
       t.thought = (t.thought ?? "") + textOf((m as { content?: unknown }).content);
@@ -319,7 +345,9 @@ export function reduceAgUiEvent(prev: PilotState, e: Ev, now: number = Date.now(
 function toHistory(v: unknown): HistoryPage | null {
   if (!v || typeof v !== "object") return null;
   const h = v as { hasMoreBefore?: unknown; before?: unknown };
-  return { hasMoreBefore: h.hasMoreBefore === true, ...(typeof h.before === "string" ? { before: h.before } : {}) };
+  // El cursor es opaco: un número (`seq`) también vale; viaja de vuelta como texto.
+  const before = typeof h.before === "string" || typeof h.before === "number" ? String(h.before) : undefined;
+  return { hasMoreBefore: h.hasMoreBefore === true, ...(before !== undefined ? { before } : {}) };
 }
 
 function finish(s0: PilotState, e: Ev, now: number, failed = false): PilotState {
@@ -426,7 +454,38 @@ export function markSubagent(prev: PilotState, taskId: string, status: SubagentT
 export function prependHistory(prev: PilotState, messages: Message[], page: HistoryPage | null): PilotState {
   const have = new Set(prev.turns.map((t) => t.id).filter(Boolean));
   const older = messagesToTurns(messages).filter((t) => !t.id || !have.has(t.id));
-  return { ...prev, turns: [...older, ...prev.turns], olderCount: prev.olderCount + older.length, history: page, effects: [] };
+  let turns = prev.turns;
+  // Si la página cortó a media respuesta (no empezaba en un mensaje del usuario), sus dos mitades
+  // son UN turno: la de la página va antes.
+  const tail = older[older.length - 1];
+  const head = turns[0];
+  if (tail?.role === "assistant" && head?.role === "assistant") {
+    older[older.length - 1] = joinTurns(tail, head);
+    turns = turns.slice(1);
+  }
+  const olderCount = Math.max(0, prev.olderCount + older.length - (turns === prev.turns ? 0 : 1));
+  return { ...prev, turns: [...older, ...turns], olderCount, history: page ? { ...page, ...(page.before !== undefined ? { before: String(page.before) } : {}) } : page, effects: [] };
+}
+
+/** Las narraciones del turno unido: las de `a`, el texto de `a` si `b` abre con pasos, y las de `b` recorridas. */
+function cutsOf(a: Turn, b: Turn, shift: number): Pick<Turn, "cuts"> {
+  const bridge = a.text.trim() && b.tools?.length && !b.cuts?.length ? [a.text.length] : [];
+  const cuts = [...(a.cuts ?? []), ...bridge, ...(b.cuts ?? []).map((c) => c + shift)];
+  return cuts.length ? { cuts } : {};
+}
+
+function joinTurns(a: Turn, b: Turn): Turn {
+  const sep = a.text && b.text ? "\n\n" : "";
+  const shift = a.text.length + sep.length;
+  return {
+    ...b,
+    ...(a.id ? { id: a.id } : {}),
+    text: a.text + sep + b.text,
+    ...(a.tools || b.tools ? { tools: [...(a.tools ?? []), ...(b.tools ?? [])] } : {}),
+    ...cutsOf(a, b, shift),
+    ...(a.custom || b.custom ? { custom: [...(a.custom ?? []), ...(b.custom ?? [])] } : {}),
+    ...(a.thought || b.thought ? { thought: (a.thought ?? "") + (b.thought ?? "") } : {}),
+  };
 }
 
 /** El servidor no aceptó el encargo (HTTP): se DICE, para que no se quede pensando. */

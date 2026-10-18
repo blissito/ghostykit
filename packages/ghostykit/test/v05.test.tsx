@@ -6,7 +6,7 @@ import { createRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { BaseEvent, Message, RunAgentInput } from "@ag-ui/core";
-import { applyJsonPatch, beginSend, createPilotState, prependHistory, reduceAgUiEvent, type PilotState } from "../src/core";
+import { applyJsonPatch, beginSend, createPilotState, messagesToTurns as messagesToTurnsT, prependHistory, reduceAgUiEvent, type PilotState } from "../src/core";
 import { Piloto, usePilot, type Pilot } from "../src/react";
 import { PilotHttpError, type PilotTransport } from "../src/transport";
 
@@ -427,5 +427,45 @@ describe("Detener con mensajes en espera", () => {
     expect(el.querySelector("textarea")!.value).toBe("y la purga");
     await act(async () => root.unmount());
     el.remove();
+  });
+});
+
+describe("historial con la forma de gs (format=agui)", () => {
+  const page: Message[] = [
+    { id: "t1:u", role: "user", content: [{ type: "text", text: "mira esto" }, { type: "image", source: { type: "url", value: "https://cdn/x.png?sig=1" } }] } as Message,
+    {
+      id: "t1:a0",
+      role: "assistant",
+      content: "Reviso.",
+      toolCalls: [{ id: "c1", type: "function", function: { name: "Read", arguments: "{\"file_path\":\"/w/a.md\"}" } }],
+      metadata: { custom: [{ name: "ghosty.tool", value: { toolCallId: "c1", title: "Leyó a.md", kind: "read" } }] },
+    } as Message,
+    { id: "t1:tc1", role: "tool", toolCallId: "c1", content: "ok" } as Message,
+    { id: "t1:a1", role: "assistant", content: "Listo.", metadata: { custom: [{ name: "ghosty.delivery", value: { url: "https://cdn/f.pdf" } }] } } as Message,
+  ];
+
+  it("rotula los pasos con ghosty.tool, guarda las entregas y lee los adjuntos con URL", () => {
+    const [u, a] = messagesToTurnsT(page);
+    expect(u.attachments).toEqual([{ mimeType: "image/*", url: "https://cdn/x.png?sig=1" }]);
+    expect(a.tools?.[0]).toMatchObject({ id: "c1", title: "Read", label: "Leyó a.md", kind: "read", status: "completed" });
+    expect(a.custom).toEqual([{ name: "ghosty.delivery", value: { url: "https://cdn/f.pdf" } }]);
+  });
+
+  it("acepta un cursor numérico (seq) y lo regresa como texto", () => {
+    const s = run(createPilotState(), [
+      { type: "CUSTOM", name: "ghosty.history", value: { hasMoreBefore: true, before: 120 } },
+      { type: "MESSAGES_SNAPSHOT", messages: page },
+    ]);
+    expect(s.history).toEqual({ hasMoreBefore: true, before: "120" });
+  });
+
+  it("una página que corta a media respuesta se une con el turno siguiente", () => {
+    let s = run(createPilotState(), [{ type: "MESSAGES_SNAPSHOT", messages: page.slice(2) }]);
+    expect(s.turns.map((t) => t.role)).toEqual(["assistant"]);
+    s = prependHistory(s, page.slice(0, 2), { hasMoreBefore: false });
+    expect(s.turns.map((t) => t.role)).toEqual(["user", "assistant"]);
+    expect(s.turns[1].text).toBe("Reviso.\n\nListo.");
+    expect(s.turns[1].tools?.map((x) => x.id)).toEqual(["c1"]);
+    expect(s.olderCount).toBe(1);
   });
 });
