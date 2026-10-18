@@ -3,17 +3,20 @@ export * from "./types";
 export {
   argsDetail,
   beginSend,
+  beginSteer,
   createPilotState,
   dropLastExchange,
   expiryMs,
   lastUserTurn,
   messagesToTurns,
+  prependHistory,
   reduceAgUiEvent,
   resolvePermission,
   sendFailed,
   stopTurn,
   toPermission,
 } from "./reducer";
+export { applyJsonPatch, type PatchOp } from "./jsonPatch";
 export { isNarration, narrationToMarkdown, splitNarration } from "./narration";
 export { cleanReplyOption, extractReplyOptions, type ReplyOptions } from "./options";
 export {

@@ -2,18 +2,20 @@
 // `RunAgentInput` (hilo, run, mensaje nuevo, contexto, respuestas a aprobaciones) y traduce los
 // efectos del reductor a callbacks de la app.
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { BaseEvent, RunAgentInput } from "@ag-ui/core";
+import type { BaseEvent, Message, RunAgentInput } from "@ag-ui/core";
 import {
   beginSend,
+  beginSteer,
   createPilotState,
   dropLastExchange,
   lastUserTurn,
+  prependHistory,
   reduceAgUiEvent,
   resolvePermission,
   sendFailed,
   stopTurn,
 } from "../core/reducer";
-import type { Attachment, Decision, PermissionRequest, PilotState, Reference, Turn } from "../core/types";
+import type { Attachment, Decision, HistoryPage, PermissionRequest, PilotState, Reference, Turn } from "../core/types";
 import { PilotHttpError, type PilotTransport } from "../transport";
 
 export interface TurnDoneInfo {
@@ -47,6 +49,18 @@ export interface UsePilotOptions {
   onEvent?: (event: BaseEvent) => void;
   /** Cada run que sale (analítica). */
   onSend?: (input: RunAgentInput) => void;
+  /** El estado del agente cambió (`STATE_SNAPSHOT` / `STATE_DELTA` ya aplicado). */
+  onState?: (state: Record<string, unknown>) => void;
+  /**
+   * Steer: mandar con el run vivo (docs/protocol.md §6). Default: lo que diga el agente en
+   * `state.caps.steer`. Sin steer, mandar mientras corre no hace nada.
+   */
+  steer?: boolean;
+  /**
+   * Trae los mensajes anteriores a `before` (el cursor de `CUSTOM ghosty.history`), p. ej. del REST de
+   * lectura de la app. Las páginas empiezan en un mensaje del usuario.
+   */
+  loadOlder?: (before: string | undefined) => Promise<{ messages: Message[] } & HistoryPage>;
 }
 
 export interface SendOptions {
@@ -67,6 +81,11 @@ export interface Pilot {
   recordDecision: (id: string, status: Decision["status"], asked?: PermissionRequest) => void;
   /** Una tarjeta venció sin contestarse: se anota y su interrupt viaja como `cancelled` en el siguiente run. */
   expirePermission: (id: string) => void;
+  /** Se puede mandar con el run vivo (steer). */
+  canSteer: boolean;
+  /** Antepone la página anterior del hilo (si hay `loadOlder` y `state.history.hasMoreBefore`). */
+  loadOlder: () => Promise<void>;
+  loadingOlder: boolean;
 }
 
 const uuid = () => {
@@ -122,6 +141,7 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
       if (e.type === "turn-start") o.onTurnStart?.();
       else if (e.type === "turn-done") o.onTurnDone?.({ text: e.text, runId: e.runId, seconds: e.seconds, error: e.error, interrupted: e.interrupted });
       else if (e.type === "title") o.onTitle?.(e.title);
+      else if (e.type === "state") o.onState?.(e.state);
     }
   }, []);
 
@@ -143,7 +163,9 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
       ctrl.current?.abort();
       const c = new AbortController();
       ctrl.current = c;
-      if (input.messages.length || input.resume?.length) liveRun.current = input.runId;
+      const steering = typeof input.forwardedProps?.steer === "string";
+      // El run que se puede detener: el que este cliente arrancó (un steer se suma al que ya corre).
+      if (!steering && (input.messages.length || input.resume?.length)) liveRun.current = input.runId;
       optsRef.current.onSend?.(input);
       let ended = false;
       try {
@@ -166,6 +188,11 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
         // Ya hay un run vivo, o aprobaciones sin contestar: se abre el hilo para verlas.
         if ((code === "run_active" || code === "interrupt_pending") && !reopening) {
           commit({ ...ref.current, notice: err instanceof Error ? err.message : null, effects: [] });
+          return runNow({ messages: [] }, true);
+        }
+        // Un steer que no entró no detiene el run: se vuelve a leer el hilo (el snapshot dice si quedó).
+        if (steering && !reopening) {
+          commit({ ...ref.current, notice: err instanceof Error && err.message ? err.message : null, effects: [] });
           return runNow({ messages: [] }, true);
         }
         commit(sendFailed(ref.current, err instanceof Error && err.message ? err.message : "No se pudo hablar con el agente."));
@@ -193,9 +220,19 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
     ...[...answers.current.entries()].map(([interruptId, a]) => ({ interruptId, ...a })),
   ];
 
+  const steerOn = () => optsRef.current.steer ?? ((ref.current.agentState.caps as { steer?: unknown } | undefined)?.steer === true);
+
   const send = useCallback(
     async (text: string, attachments: Attachment[] = [], _extra: SendOptions = {}) => {
-      if (!transportRef.current || ref.current.busy) return;
+      if (!transportRef.current) return;
+      if (ref.current.busy) {
+        // Steer: el mensaje entra al run que corre (sólo texto).
+        const live = liveRun.current ?? ref.current.runId;
+        if (!steerOn() || !live || !text.trim() || attachments.length) return;
+        commit(beginSteer(ref.current, text));
+        await runNow({ messages: [userMessage(text, [])], forwardedProps: { steer: live } });
+        return;
+      }
       // Mandar un mensaje con tarjetas abiertas las descarta (AG-UI pide cerrarlas en el mismo run).
       const resume = pendingResume();
       answers.current.clear();
@@ -269,5 +306,28 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
     [commit, sendAnswersIfComplete],
   );
 
-  return { state, threadId, send, stop, retry, respondPermission, recordDecision, expirePermission };
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const loadingRef = useRef(false);
+  const loadOlder = useCallback(async () => {
+    const fn = optsRef.current.loadOlder;
+    const h = ref.current.history;
+    if (!fn || !h?.hasMoreBefore || loadingRef.current) return;
+    loadingRef.current = true;
+    setLoadingOlder(true);
+    try {
+      const page = await fn(h.before);
+      // Si mientras tanto llegó otro snapshot que soltó lo anterior, esta página ya no encaja.
+      if (ref.current.history !== h) return;
+      commit(prependHistory(ref.current, page.messages ?? [], { hasMoreBefore: page.hasMoreBefore === true, ...(page.before ? { before: page.before } : {}) }));
+    } catch (err) {
+      commit({ ...ref.current, notice: err instanceof Error && err.message ? err.message : null, effects: [] });
+    } finally {
+      loadingRef.current = false;
+      setLoadingOlder(false);
+    }
+  }, [commit]);
+
+  const canSteer = Boolean(transport) && (opts.steer ?? ((state.agentState.caps as { steer?: unknown } | undefined)?.steer === true));
+
+  return { state, threadId, send, stop, retry, respondPermission, recordDecision, expirePermission, canSteer, loadOlder, loadingOlder };
 }

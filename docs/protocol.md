@@ -47,7 +47,7 @@ Body: `RunAgentInput`.
 | `messages` | **Only what is new in this request**: the user's message, or nothing (see §5) | Append to the stored thread. Never trust the client for older history. |
 | `context` | What the user sees right now, one entry per key; `value` is a string (JSON when structured) | Give it to the agent for this run only. |
 | `resume` | Answers to pending approvals (see §4) | Continue the paused run. |
-| `forwardedProps` | Empty, except `{"cancel": "<runId>"}` to stop a run (§6) | Stop that run. |
+| `forwardedProps` | Empty, except `{"cancel": "<runId>"}` to stop a run, or `{"steer": "<runId>"}` to add the message to a live run (§6) | Stop that run / inject the message. |
 | `tools`, `state` | Empty | Ignore unless your agent uses them. |
 
 Attachments go in the user message as AG-UI content parts:
@@ -94,8 +94,9 @@ How each one shows up in the chat:
 | `TOOL_CALL_START` … `END` | A step ("Reading the history…") with a spinner. The tool name is the label key, so apps can name it in their own words. |
 | `TOOL_CALL_RESULT` | The step turns into a check. If the tool failed, add `"metadata": {"error": true}` to the event and the step turns red. |
 | `REASONING_MESSAGE_*` | Optional: the collapsible "Thinking…" block. |
-| `STEP_STARTED` / `STEP_FINISHED` | Optional; ignored by the UI today. |
-| `STATE_SNAPSHOT` / `STATE_DELTA` | Optional; passed to the app (`onEvent`), not drawn. |
+| `STEP_STARTED` / `STEP_FINISHED` | Optional. While nothing else is on screen, a step whose `stepName` the app has a label for (`strings.steps`, built in: `waking`, `session`) replaces the waiting phrase. Other names are not drawn, so framework node names never leak into the chat. |
+| `STATE_SNAPSHOT` / `STATE_DELTA` | Optional. The agent's shared state, given to the app as `pilot.state.agentState` (`STATE_DELTA` is an RFC 6902 JSON Patch over the last snapshot; a patch that doesn't apply is ignored until the next snapshot). One key has meaning for the client: `caps.steer: true` turns on steer (§6). |
+| `CUSTOM` | Kept in the turn as `turn.custom[]` (`{name, value, timestamp}`) for the app to draw (`renderDeliveries`), except the protocol ones in §7. |
 | `RUN_FINISHED` `usage` | Optional: tokens/cost under the answer (`[{model, inputTokens, outputTokens}]`). |
 | `RUN_ERROR` `{message, code?}` | The run ends here, with the message shown in red. Do **not** send `RUN_FINISHED` after it. |
 
@@ -186,9 +187,35 @@ then ONE of:
 
 `MESSAGES_SNAPSHOT` uses AG-UI messages:
 `{id, role: "user", content}`,
-`{id, role: "assistant", content?, toolCalls?: [{id, type: "function", function: {name, arguments}}]}`,
+`{id, role: "assistant", content?, toolCalls?: [{id, type: "function", function: {name, arguments}}], custom?: [{name, value}]}`,
 `{id, role: "tool", toolCallId, content, error?}`. The client rebuilds the bubbles and steps from it.
-There is no event replay and no `Last-Event-ID`: the snapshot is the source of truth.
+There is no event replay and no `Last-Event-ID`: the snapshot is the source of truth. Message ids
+must be stable (the client uses them to join history pages).
+
+- **A live run is part of the snapshot.** It includes what the live run has said so far; the events
+  that follow continue from there.
+- **What a turn delivered** (files, artifacts: the `CUSTOM` events of §7 that the app draws) goes
+  in the `custom` field of that assistant message, so it is still there after a reload. AG-UI
+  messages allow extra fields.
+- **A snapshot may also arrive in the middle of a run**, for example when the backend rewrites text it
+  already sent (a guard, a compaction). The client replaces the thread and keeps the run going: same
+  `runId`, still busy, tool calls without a result still running.
+
+### Long threads (optional)
+
+A backend doesn't have to send the whole thread. It can send the latest messages and announce that
+there are older ones with a `CUSTOM` **right before** the snapshot:
+
+```text
+CUSTOM            {name: "ghosty.history", value: {hasMoreBefore: true, before: "<cursor>"}}
+MESSAGES_SNAPSHOT {messages: [ …the last N messages… ]}
+```
+
+The chat then shows "Load earlier messages". The app fetches them through its own read API, outside
+this endpoint, with the `loadOlder(before)` option. That option returns
+`{messages, hasMoreBefore, before}`: AG-UI messages, oldest first, ending right before the cursor.
+Pages start at a user message (never in the middle of a turn) and `before` is opaque to the client.
+A later snapshot keeps the loaded pages when it starts at a message the client already has.
 
 ## 6. Stopping and errors
 
@@ -205,6 +232,18 @@ There is no event replay and no `Last-Event-ID`: the snapshot is the source of t
   stopped run, its stream also ends with `RUN_FINISHED {outcome: {type: "cancelled"}}`. Stopping a
   run that already ended is harmless (same answer). `cancel` is the `runId` the client sent when it
   started the run.
+- **Steer (optional).** With `caps.steer: true` in the agent state (§3), the user can write while a
+  run is going. The client posts the message with a new `runId` and the live run in
+  `forwardedProps.steer`:
+  ```json
+  { "threadId": "th_2f1c", "runId": "run_8b10", "messages": [ { "id": "msg_07", "role": "user", "content": "also check the purge" } ], "forwardedProps": { "steer": "run_8a77" } }
+  ```
+  The backend adds the message to that run (the agent reads it at its next step) and answers with
+  the **rest of the live run**, as if reconnecting: `RUN_STARTED {runId: "run_8a77"}` →
+  `CUSTOM ghosty.injected {messageId: "msg_07"}` → the run's events until its `RUN_FINISHED`. The
+  client stops reading the old stream and follows this one. The snapshot (§5) stores the message
+  where it was injected. If the run already ended or the backend can't inject, it answers
+  `409 run_active` (or starts a normal run if nothing is live), and the client reconnects (§5).
 - **HTTP errors** (before the stream starts; body `{"error": "<code>", "message": "<for people>"}`):
 
 | Status | When | Client does |
@@ -220,11 +259,19 @@ There is no event replay and no `Last-Event-ID`: the snapshot is the source of t
 
 ## 7. Custom events
 
-Only one, and it is optional. The app reads it through `onEvent`:
+All optional. Names starting with `ghosty.` are reserved for this list. The first three are part of
+the protocol; the client handles them and doesn't keep them in the turn. The rest are content: they
+go to `turn.custom[]` for the app to draw, and every event also reaches the app through `onEvent`.
 
 | `CUSTOM` name | `value` | Meaning |
 |---|---|---|
 | `ghosty.title` | `{ "title": "Monitor timeouts" }` | The backend named the thread (for a sidebar). |
+| `ghosty.history` | `{ "hasMoreBefore": true, "before": "<cursor>" }` | Sent right before `MESSAGES_SNAPSHOT`: there are older messages (§5). |
+| `ghosty.injected` | `{ "messageId": "msg_07" }` | A steer message entered the live run (§6). |
+| `ghosty.delivery` | `{ "tipo", "nombre", "fileId", "url", "mime", "size", "captura" }` | The turn delivered a file or artifact. **A URL, never base64.** Also stored in the message's `custom` (§5). |
+| `ghosty.ui` | `{ "action": "…", … }` | The agent asks the app to do something on screen (move or open a card). |
+| `ghosty.reply_to` | `{ "messageId": "…" }` | The answer replies to a specific earlier message. |
+| `ghosty.attachments_failed` | `{ "names": ["…"] }` | Attachments of the user's message the agent couldn't read. |
 
 ## 8. Checklist for a backend
 
@@ -236,6 +283,8 @@ Only one, and it is optional. The app reads it through `onEvent`:
 4. An empty `messages` with no `resume` answers `MESSAGES_SNAPSHOT` plus the live run, the pending
    interrupt, or success.
 5. A closed connection never stops a run; `forwardedProps.cancel` does. `409`/`429`/`503` as in §6.
+6. Optional: `STATE_SNAPSHOT`/`STATE_DELTA` with `caps`, steer with `forwardedProps.steer`,
+   `ghosty.history` for long threads, and deliveries in `custom`.
 
 Reference: an agent written with LangGraph and served through its official AG-UI adapter
 (`@ag-ui/langgraph`) is in [`examples/langgraph`](../examples/langgraph).

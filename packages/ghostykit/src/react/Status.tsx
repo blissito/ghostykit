@@ -22,7 +22,10 @@ export function TypingDots() {
 export function WaitLabel({
   since,
   showDuration = true,
+  step,
 }: {
+  /** El paso con nombre en curso (`STEP_STARTED`): si `strings.steps` lo nombra, esa es la frase. */
+  step?: string | null;
   /** Desde que se MANDÓ el mensaje (no desde que se montó la etiqueta). */
   since?: number | null;
   showDuration?: boolean;
@@ -36,7 +39,8 @@ export function WaitLabel({
   }, []);
   const seconds = Math.max(0, Math.floor((now - (since || mounted)) / 1000));
   const phrases = t.thinkingPhrases;
-  const what = phrases?.length ? (seconds >= STILL_WORKING_S ? t.stillWorking : phrases[Math.floor(seconds / 4) % phrases.length]) : t.howItGoes(seconds);
+  const stepText = step ? t.steps?.[step] : undefined;
+  const what = stepText ? stepText : phrases?.length ? (seconds >= STILL_WORKING_S ? t.stillWorking : phrases[Math.floor(seconds / 4) % phrases.length]) : t.howItGoes(seconds);
   return (
     <div className="flex flex-col gap-0.5 text-sm text-text-secondary">
       {/* La frase cambia con fundido (sale y entra), como en claude.ai. */}

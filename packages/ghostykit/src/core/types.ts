@@ -46,7 +46,23 @@ export interface Decision {
   detail?: string;
 }
 
+/** Un evento `CUSTOM` del turno (entregas de archivos, avisos propios de la app). */
+export interface CustomEntry {
+  name: string;
+  value: unknown;
+  timestamp?: number;
+}
+
+/** Hay mensajes más viejos que los del snapshot (`CUSTOM ghosty.history`). */
+export interface HistoryPage {
+  hasMoreBefore: boolean;
+  /** Cursor opaco del servidor: se le regresa a `loadOlder`. */
+  before?: string;
+}
+
 export interface Turn {
+  /** El id del primer mensaje AG-UI del turno (sólo los que vienen de un snapshot). */
+  id?: string;
   role: "user" | "assistant";
   text: string;
   /** Cuánto tardó, en segundos (sólo los turnos vistos en vivo). */
@@ -59,6 +75,9 @@ export interface Turn {
   usage?: Usage;
   /** Lo que el usuario decidió en las tarjetas de este turno (sólo en vivo). */
   decisions?: Decision[];
+  /** Los `CUSTOM` del turno (p. ej. `ghosty.delivery`), para `renderDeliveries`. Del snapshot salen
+   *  del campo `custom` de cada mensaje del asistente. */
+  custom?: CustomEntry[];
 }
 
 /** Una opción de la tarjeta de aprobación. */
@@ -92,7 +111,8 @@ export interface PermissionRequest {
 export type PilotEffect =
   | { type: "turn-start" }
   | { type: "turn-done"; text: string; runId?: string; seconds?: number; error?: string; interrupted?: boolean }
-  | { type: "title"; title?: string };
+  | { type: "title"; title?: string }
+  | { type: "state"; state: Record<string, unknown> };
 
 export interface PilotState {
   turns: Turn[];
@@ -106,6 +126,16 @@ export interface PilotState {
   /** Cuándo empezó el turno que ESTE cliente encargó (0 = ninguno). */
   turnStartedAt: number;
   runId: string | null;
+  /** El estado compartido del agente (`STATE_SNAPSHOT`, con `STATE_DELTA` aplicado encima). */
+  agentState: Record<string, unknown>;
+  /** El paso con nombre en curso (`STEP_STARTED`), p. ej. `waking`. */
+  step: string | null;
+  /** Si hay mensajes más viejos por cargar (`loadOlder`). */
+  history: HistoryPage | null;
+  /** Cuántos de `turns` llegaron con `loadOlder` (van antes del snapshot). */
+  olderCount: number;
+  /** El `ghosty.history` que acompaña al snapshot que viene. */
+  historyNext?: HistoryPage | null;
   /** Efectos de la ÚLTIMA transición. El hook los ejecuta y los descarta. */
   effects: PilotEffect[];
 }

@@ -6,11 +6,29 @@
 // un run, el snapshot REEMPLAZA lo que se armó en vivo (conservando lo que sólo se ve en vivo:
 // segundos, uso, decisiones y pensamiento).
 import type { Interrupt, Message } from "@ag-ui/core";
-import type { Attachment, Decision, PermissionOption, PermissionRequest, PilotEffect, PilotState, ToolEntry, Turn } from "./types";
+import { applyJsonPatch, type PatchOp } from "./jsonPatch";
+import type { Attachment, CustomEntry, Decision, HistoryPage, PermissionOption, PermissionRequest, PilotEffect, PilotState, ToolEntry, Turn } from "./types";
 
 export function createPilotState(turns: Turn[] = []): PilotState {
-  return { turns, busy: false, error: null, notice: null, usage: null, permissions: [], turnStartedAt: 0, runId: null, effects: [] };
+  return {
+    turns,
+    busy: false,
+    error: null,
+    notice: null,
+    usage: null,
+    permissions: [],
+    turnStartedAt: 0,
+    runId: null,
+    agentState: {},
+    step: null,
+    history: null,
+    olderCount: 0,
+    effects: [],
+  };
 }
+
+/** Los `CUSTOM` que son fontanería del protocolo, no contenido del turno. */
+const PROTOCOL_CUSTOM = new Set(["ghosty.title", "ghosty.injected", "ghosty.history"]);
 
 type Ev = { type: string; [k: string]: any };
 
@@ -105,9 +123,9 @@ function attachmentsOf(content: unknown): Attachment[] | undefined {
 export function messagesToTurns(messages: Message[]): Turn[] {
   const turns: Turn[] = [];
   let cur: Turn | null = null;
-  const assistant = () => {
+  const assistant = (id?: string) => {
     if (!cur) {
-      cur = { role: "assistant", text: "" };
+      cur = { ...(id ? { id } : {}), role: "assistant", text: "" };
       turns.push(cur);
     }
     return cur;
@@ -115,9 +133,13 @@ export function messagesToTurns(messages: Message[]): Turn[] {
   for (const m of messages) {
     if (m.role === "user") {
       cur = null;
-      turns.push({ role: "user", text: textOf(m.content), ...(attachmentsOf(m.content) ? { attachments: attachmentsOf(m.content) } : {}) });
+      turns.push({ ...(m.id ? { id: m.id } : {}), role: "user", text: textOf(m.content), ...(attachmentsOf(m.content) ? { attachments: attachmentsOf(m.content) } : {}) });
     } else if (m.role === "assistant") {
       const t = assistant();
+      if (!t.id && m.id) t.id = m.id;
+      // Lo que el turno entregó (`CUSTOM ghosty.delivery`…) viaja en el campo `custom` del mensaje.
+      const custom = (m as { custom?: CustomEntry[] }).custom;
+      if (Array.isArray(custom) && custom.length) t.custom = [...(t.custom ?? []), ...custom.filter((c) => c && typeof c.name === "string")];
       const text = m.content ?? "";
       if (text) t.text = t.text ? `${t.text}\n\n${text}` : text;
       for (const c of m.toolCalls ?? []) {
@@ -125,35 +147,61 @@ export function messagesToTurns(messages: Message[]): Turn[] {
         if (t.text.trim() && t.cuts?.[t.cuts.length - 1] !== t.text.length) t.cuts = [...(t.cuts ?? []), t.text.length];
       }
     } else if (m.role === "tool") {
-      const t = assistant();
+      const t = assistant(m.id);
       const failed = Boolean((m as { error?: string }).error);
       t.tools = (t.tools ?? []).map((x) => (x.id === m.toolCallId ? { ...x, status: failed ? "failed" : "completed" } : x));
     } else if (m.role === "reasoning") {
-      const t = assistant();
+      const t = assistant(m.id);
       t.thought = (t.thought ?? "") + textOf((m as { content?: unknown }).content);
     }
   }
   return turns;
 }
 
-/** El snapshot manda, pero lo que sólo existe en vivo (segundos, uso, decisiones…) se conserva. */
+/**
+ * El snapshot manda, pero lo que sólo existe en vivo (segundos, uso, decisiones…) se conserva.
+ * Con un run vivo (reconexión, o un reemplazo a media respuesta) el run sigue: `busy` y `runId` no
+ * cambian y sus pasos sin resultado siguen corriendo. Lo cargado con `loadOlder` se queda delante si
+ * el snapshot empieza en un turno que ya teníamos; si no, el hilo vuelve a empezar en el snapshot.
+ */
 function applySnapshot(s: PilotState, messages: Message[]): PilotState {
   const fresh = messagesToTurns(messages);
-  const old = s.turns;
+  let prefix: Turn[] = [];
+  if (s.olderCount && fresh[0]?.id) {
+    const at = s.turns.findIndex((t) => t.id === fresh[0].id);
+    if (at >= 0) prefix = s.turns.slice(0, at);
+  }
+  const keepOlder = prefix.length > 0;
+  const old = keepOlder ? s.turns.slice(prefix.length) : s.turns.slice(s.olderCount);
+  const lastIndex = fresh.length - 1;
   const turns = fresh.map((t, i) => {
     const o = old[i];
-    if (!o || o.role !== t.role) return t;
+    // Un paso sin resultado en el turno vivo sigue corriendo (después del run, espera aprobación).
+    const live = s.busy && i === lastIndex && t.role === "assistant";
+    const tools = t.tools?.map((x) => {
+      const prev = o?.role === t.role ? o.tools?.find((y) => y.id === x.id) : undefined;
+      const status = x.status === "pending" && (prev?.status ?? (live ? "in_progress" : undefined));
+      return { ...prev, ...x, ...(status ? { status } : {}) };
+    });
+    const base = tools ? { ...t, tools } : t;
+    if (!o || o.role !== t.role) return base;
     return {
-      ...t,
+      ...base,
       ...(o.seconds !== undefined ? { seconds: o.seconds } : {}),
       ...(o.usage ? { usage: o.usage } : {}),
       ...(o.decisions ? { decisions: o.decisions } : {}),
       ...(o.thought && !t.thought ? { thought: o.thought } : {}),
       ...(o.attachments && !t.attachments ? { attachments: o.attachments } : {}),
-      ...(o.tools && t.tools ? { tools: t.tools.map((x) => ({ ...o.tools!.find((y) => y.id === x.id), ...x })) } : {}),
+      ...(o.custom && !t.custom ? { custom: o.custom } : {}),
     };
   });
-  return { ...s, turns };
+  return {
+    ...s,
+    turns: [...prefix, ...turns],
+    olderCount: prefix.length,
+    history: keepOlder ? s.history : (s.historyNext ?? null),
+    historyNext: undefined,
+  };
 }
 
 /** Un evento AG-UI → estado nuevo. `now` se inyecta para que el reductor sea puro. */
@@ -161,7 +209,7 @@ export function reduceAgUiEvent(prev: PilotState, e: Ev, now: number = Date.now(
   const s: PilotState = prev.effects.length ? { ...prev, effects: [] } : prev;
   switch (e.type) {
     case "RUN_STARTED":
-      return { ...s, busy: true, error: null, runId: e.runId ?? s.runId };
+      return { ...s, busy: true, error: null, step: null, runId: e.runId ?? s.runId };
     case "TEXT_MESSAGE_START":
       if (e.role && e.role !== "assistant") return s;
       // Un mensaje nuevo del mismo turno va en párrafo aparte.
@@ -203,17 +251,39 @@ export function reduceAgUiEvent(prev: PilotState, e: Ev, now: number = Date.now(
       return finish(s, e, now);
     case "RUN_ERROR":
       return finish({ ...s, error: typeof e.message === "string" ? e.message : "El agente falló." }, e, now, true);
+    case "STEP_STARTED":
+      return typeof e.stepName === "string" ? { ...s, step: e.stepName } : s;
+    case "STEP_FINISHED":
+      return s.step === e.stepName ? { ...s, step: null } : s;
+    case "STATE_SNAPSHOT": {
+      const agentState = e.snapshot && typeof e.snapshot === "object" ? (e.snapshot as Record<string, unknown>) : {};
+      return { ...s, agentState, effects: [{ type: "state", state: agentState }] };
+    }
+    case "STATE_DELTA": {
+      if (!Array.isArray(e.delta)) return s;
+      const { doc, ok } = applyJsonPatch(s.agentState, e.delta as PatchOp[]);
+      // Un delta que no aplica (estado desfasado) se ignora: el siguiente snapshot lo corrige.
+      return ok ? { ...s, agentState: doc, effects: [{ type: "state", state: doc }] } : s;
+    }
     case "CUSTOM":
       if (e.name === "ghosty.title") return { ...s, effects: [{ type: "title", title: e.value?.title }] };
-      return s;
+      if (e.name === "ghosty.history") return { ...s, historyNext: toHistory(e.value) };
+      if (typeof e.name !== "string" || PROTOCOL_CUSTOM.has(e.name)) return s;
+      return patchAssistant(s, (t) => ({ ...t, custom: [...(t.custom ?? []), { name: e.name, value: e.value, ...(typeof e.timestamp === "number" ? { timestamp: e.timestamp } : {}) }] }));
     default:
-      // STEP_*, STATE_*, ACTIVITY_*, RAW…: no se pintan (la app los ve por `onEvent`).
+      // ACTIVITY_*, RAW…: no se pintan (la app los ve por `onEvent`).
       return s;
   }
 }
 
+function toHistory(v: unknown): HistoryPage | null {
+  if (!v || typeof v !== "object") return null;
+  const h = v as { hasMoreBefore?: unknown; before?: unknown };
+  return { hasMoreBefore: h.hasMoreBefore === true, ...(typeof h.before === "string" ? { before: h.before } : {}) };
+}
+
 function finish(s0: PilotState, e: Ev, now: number, failed = false): PilotState {
-  let s: PilotState = { ...s0, busy: false };
+  let s: PilotState = { ...s0, busy: false, step: null };
   const outcome = e.outcome as { type?: string; interrupts?: Interrupt[] } | undefined;
   const interrupted = outcome?.type === "interrupt" && Array.isArray(outcome.interrupts) && outcome.interrupts.length > 0;
   // Las tarjetas abiertas son las del último run: si terminó bien o se canceló, ya no hay.
@@ -263,6 +333,24 @@ export function beginSend(prev: PilotState, text: string, attachments: Attachmen
   return { ...prev, turns, busy: true, error: null, notice: null, turnStartedAt: now, effects: [{ type: "turn-start" }] };
 }
 
+/**
+ * Steer: un mensaje del usuario mientras el run sigue. Su burbuja entra en el hilo y lo que el agente
+ * diga después va en una respuesta nueva debajo; el run (y su reloj) siguen siendo los mismos.
+ */
+export function beginSteer(prev: PilotState, text: string): PilotState {
+  return { ...prev, turns: [...prev.turns, { role: "user", text }], notice: null, effects: [] };
+}
+
+/**
+ * Mensajes más viejos (`loadOlder`) delante del hilo. Las páginas empiezan en un mensaje del usuario;
+ * lo que ya se tenía (mismo id) no se repite.
+ */
+export function prependHistory(prev: PilotState, messages: Message[], page: HistoryPage | null): PilotState {
+  const have = new Set(prev.turns.map((t) => t.id).filter(Boolean));
+  const older = messagesToTurns(messages).filter((t) => !t.id || !have.has(t.id));
+  return { ...prev, turns: [...older, ...prev.turns], olderCount: prev.olderCount + older.length, history: page, effects: [] };
+}
+
 /** El servidor no aceptó el encargo (HTTP): se DICE, para que no se quede pensando. */
 export function sendFailed(prev: PilotState, message: string): PilotState {
   return { ...prev, busy: false, turnStartedAt: 0, error: message, effects: [] };
@@ -270,7 +358,7 @@ export function sendFailed(prev: PilotState, message: string): PilotState {
 
 /** Detener: el cliente cortó la conexión (el servidor corta el run). */
 export function stopTurn(prev: PilotState): PilotState {
-  return { ...prev, busy: false, turnStartedAt: 0, turns: closeOpenTools(prev.turns, "cancelled"), effects: [] };
+  return { ...prev, busy: false, step: null, turnStartedAt: 0, turns: closeOpenTools(prev.turns, "cancelled"), effects: [] };
 }
 
 /** Quita el último intercambio (las respuestas del final y el último mensaje del usuario). */

@@ -46,6 +46,8 @@ export interface PilotoFeatures {
   replyOptions?: boolean;
   /** «· 12 s» junto a la frase de espera. Default: sí. */
   duration?: boolean;
+  /** Mandar con el run vivo (steer). Default: lo que diga el agente en `state.caps.steer`. */
+  steer?: boolean;
 }
 
 export interface PilotoSlots {
@@ -59,6 +61,8 @@ export interface PilotoSlots {
   headerActions?: ReactNode;
   /** Pegado arriba del composer (un aviso, un banner). */
   aboveComposer?: ReactNode;
+  /** Un panel junto al chat (subagentes, vista previa), con el estado del agente. */
+  sidePanel?: (agentState: Record<string, unknown>) => ReactNode;
 }
 
 export interface PilotoProps extends UsePilotOptions {
@@ -116,10 +120,10 @@ const ANCHOR_GAP = 24;
 
 export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(props, handle) {
   const { transport, pilot: external, locale = "es", theme = "light", features = {}, slots = {} } = props;
-  const own = usePilot(external ? null : transport, props);
+  const own = usePilot(external ? null : transport, features.steer === undefined ? props : { ...props, steer: features.steer });
   const pilot = external ?? own;
   const { state } = pilot;
-  const { turns, busy, error, notice, permissions } = state;
+  const { turns, busy, error, notice, permissions, olderCount } = state;
 
   const strings = useMemo<PilotStrings>(() => ({ ...(locale === "en" ? STRINGS_EN : STRINGS_ES), ...props.strings }), [locale, props.strings]);
   const config = useMemo<PilotoConfig>(
@@ -218,6 +222,20 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
   const [atBottom, setAtBottom] = useState(true);
   const message = (n: number) => scroller.current?.querySelector<HTMLElement>(`[data-turn="${n}"]`) ?? null;
 
+  // Al anteponer mensajes viejos, lo que se veía se queda en su lugar.
+  const olderSeen = useRef(olderCount);
+  const heightBefore = useRef(0);
+  useIsoLayoutEffect(() => {
+    const el = scroller.current;
+    if (el && olderCount > olderSeen.current && heightBefore.current) el.scrollTop += el.scrollHeight - heightBefore.current;
+    olderSeen.current = olderCount;
+    heightBefore.current = 0;
+  }, [olderCount]);
+  const loadOlder = () => {
+    heightBefore.current = scroller.current?.scrollHeight ?? 0;
+    void pilot.loadOlder();
+  };
+
   // Al abrir el hilo: al final, sin animación.
   const placed = useRef(false);
   useEffect(() => {
@@ -242,11 +260,12 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
   useEffect(() => {
     if (mine === mineSeen.current) return;
     mineSeen.current = mine;
-    if (mine) setAnchor(mineIndex);
+    // `data-turn` cuenta desde el snapshot: lo anterior (`loadOlder`) va en negativo y no lo mueve.
+    if (mine) setAnchor(mineIndex - olderCount);
     following.current = true;
   }, [mine, mineIndex]);
 
-  const gapAbove = (a: HTMLElement) => (anchor === 0 ? a.offsetTop : ANCHOR_GAP);
+  const gapAbove = (a: HTMLElement) => (anchor === -olderCount ? a.offsetTop : ANCHOR_GAP);
   const measureSpacer = useCallback(() => {
     const sc = scroller.current;
     const sp = spacer.current;
@@ -317,7 +336,7 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
         onSubmit={send}
         onStop={pilot.stop}
         busy={busy}
-        canSteer={false}
+        canSteer={pilot.canSteer}
         placeholder={placeholder}
         attachments={showFiles}
         upload={props.upload}
@@ -331,6 +350,17 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
     </div>
   );
 
+  // Con `sidePanel`, el chat y el panel van lado a lado (el panel lo dibuja la app).
+  const withPanel = (chat: ReactNode) =>
+    slots.sidePanel ? (
+      <div className="flex min-h-0 flex-1 flex-row">
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">{chat}</div>
+        {slots.sidePanel(state.agentState)}
+      </div>
+    ) : (
+      chat
+    );
+
   const permissionCards = cards.map((p: PermissionRequest) => (
     <ConfirmCard key={p.id} request={p} onRespond={respond} onSettled={settle} onExpire={pilot.expirePermission} />
   ));
@@ -340,7 +370,7 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
   return (
     <PilotoContext.Provider value={config}>
       <div {...rootProps(theme, props.skin)} data-busy={busy || undefined} className={`piloto ${props.className ?? ""}`} style={props.style}>
-        {empty ? (
+        {withPanel(empty ? (
           // Un hilo vacío enseña lo mismo que la portada: la cara, el saludo, la caja y por dónde
           // empezar. Si no cabe (panel bajo), se desplaza: `safe center` nunca empuja nada fuera.
           <div className="gs-scroll flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-4 pb-[10vh] [justify-content:safe_center]">
@@ -386,11 +416,21 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
               className="gs-scroll relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
             >
               <div ref={column} className="mx-auto flex w-full max-w-[784px] flex-col gap-6 px-4 py-8 sm:px-6">
+                {state.history?.hasMoreBefore && (external || props.loadOlder) && (
+                  <button
+                    type="button"
+                    onClick={loadOlder}
+                    disabled={pilot.loadingOlder}
+                    className="self-center rounded-full border border-border-primary px-3 py-1 text-sm text-text-secondary transition hover:text-text-primary disabled:opacity-60"
+                  >
+                    {pilot.loadingOlder ? t.loadingOlder : t.loadOlder}
+                  </button>
+                )}
                 {turns.map((turn, i) => {
                   const isLast = i === turns.length - 1;
                   const live = busy && isLast;
                   return (
-                    <div key={i} data-turn={i}>
+                    <div key={i - olderCount} data-turn={i - olderCount}>
                       {turn.role === "user" ? (
                         <UserBubble turn={turn} />
                       ) : (
@@ -412,7 +452,7 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
                 {busy && !toolRunning && !cards.length && (
                   <div className="flex flex-col gap-1.5">
                     <TypingDots />
-                    <WaitLabel since={state.turnStartedAt} showDuration={features.duration !== false} />
+                    <WaitLabel since={state.turnStartedAt} step={state.step} showDuration={features.duration !== false} />
                   </div>
                 )}
                 {notice && <p className="text-sm text-text-tertiary">{notice}</p>}
@@ -435,7 +475,7 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
               {composer}
             </div>
           </>
-        )}
+        ))}
       </div>
     </PilotoContext.Provider>
   );

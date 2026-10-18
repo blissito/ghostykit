@@ -56,6 +56,10 @@ export interface PilotStrings {
   linkOpen: string;
   close: string;
   goToLatest: string;
+  /** La frase de espera de cada paso con nombre (`STEP_STARTED.stepName`). Los que no estén aquí no se pintan. */
+  steps: Record<string, string>;
+  loadOlder: string;
+  loadingOlder: string;
   confirmTitle: string;
   approve: string;
   reject: string;
@@ -129,6 +133,9 @@ export const STRINGS_ES: PilotStrings = {
   linkOpen: "Abrir",
   close: "Cerrar",
   goToLatest: "Ir al último mensaje",
+  steps: { waking: "Despertando al agente…", session: "Preparando la sesión…" },
+  loadOlder: "Cargar mensajes anteriores",
+  loadingOlder: "Cargando…",
   confirmTitle: "Necesito tu permiso para",
   approve: "Aprobar",
   reject: "Rechazar",
@@ -201,6 +208,9 @@ export const STRINGS_EN: PilotStrings = {
   linkOpen: "Open",
   close: "Close",
   goToLatest: "Go to latest message",
+  steps: { waking: "Waking the agent…", session: "Starting the session…" },
+  loadOlder: "Load earlier messages",
+  loadingOlder: "Loading…",
   confirmTitle: "I need your permission to",
   approve: "Approve",
   reject: "Reject",

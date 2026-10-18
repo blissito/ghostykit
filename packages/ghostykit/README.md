@@ -109,10 +109,13 @@ ref.current?.send("Why did this fail?");                     // ask on the user'
 ```
 
 Other options: `strings`, `toolIcons`, `formatUserText`, `markdown`, `features`
-(`attachments`, `retry`, `copy`, `usage`, `replyOptions`, `duration`), `references` /
-`onReferencesChange`, `voiceNoteText`, `placeholder`, `avatar`, `initialTurns`, and the callbacks
-`onTurnStart`, `onTitle`, `onEvent` (every raw AG-UI event: STATE_*, CUSTOM…), `onSend`. To read the state
-outside the chat, call `usePilot(transport)` yourself and pass the result as `pilot`. Every piece is
+(`attachments`, `retry`, `copy`, `usage`, `replyOptions`, `duration`, `steer`), `references` /
+`onReferencesChange`, `voiceNoteText`, `placeholder`, `avatar`, `initialTurns`, `loadOlder` (earlier
+pages of a long thread), the slot `sidePanel`, and the callbacks `onTurnStart`, `onTitle`, `onState`,
+`onEvent` (every raw AG-UI event), `onSend`. The agent's shared state (`STATE_SNAPSHOT` +
+`STATE_DELTA`) is `pilot.state.agentState`, and each turn's `CUSTOM` events are `turn.custom` (what
+`renderDeliveries` draws). To read the state outside the chat, call `usePilot(transport)` yourself
+and pass the result as `pilot`. Every piece is
 exported (`AgentBubble`, `AgentSteps`, `Composer`, `ConfirmCard`, `Markdown`, …) if you want to build
 your own layout.
 
