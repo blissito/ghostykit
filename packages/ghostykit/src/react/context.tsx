@@ -2,6 +2,7 @@
 import { createContext, useContext, type ComponentType } from "react";
 import { TOOL_VERBS_ES, type ToolVerbs } from "../core/steps";
 import { cleanUserText } from "../core/text";
+import type { Turn } from "../core/types";
 import { STRINGS_ES, type PilotStrings } from "./strings";
 
 /** Un ícono: cualquier componente que acepte `className` (los de lucide-react sirven tal cual). */
@@ -12,7 +13,7 @@ export type PilotTheme = "light" | "dark" | "auto";
 /** Ajustes del markdown de las respuestas. */
 export interface MarkdownOptions {
   /** Reescribe el markdown antes de pintarlo (p. ej. `#12` → `[#12](#folio-12)`). */
-  transform?: (md: string) => string;
+  transform?: (md: string, turn?: Turn) => string;
   /** Un clic en un enlace. Devuelve `true` si la app lo manejó (no se abre el aviso de salida). */
   onLinkClick?: (href: string, event: MouseEvent) => boolean;
 }
@@ -40,6 +41,9 @@ export const PilotoContext = createContext<PilotoConfig>({
 });
 
 export const usePiloto = () => useContext(PilotoContext);
+
+/** La respuesta que se está pintando (para `markdown.transform(md, turn)`). */
+export const TurnContext = createContext<Turn | undefined>(undefined);
 
 /** Las clases de la raíz: el alcance de los estilos y el tema. Lo usan también los portales. */
 export function rootProps(theme: PilotTheme, skin = "ghosty"): { className: string; "data-theme": PilotTheme; "data-skin": string } {

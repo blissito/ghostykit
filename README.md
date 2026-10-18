@@ -147,9 +147,12 @@ const PLUGINS = [crm, modelPicker({ onChange: (model) => api.setModel(model) }),
 | Point | What it does | Example |
 |---|---|---|
 | `name` | Unique. Marks everything it draws with `data-plugin="<name>"`. | `"crm"` |
+| `styles` | Whose styles its views use. `"host"` (default): your app's; ghostykit's utilities stay out (`data-piloto-isolate`), so they never override your classes. `"ghostykit"`: for views built from ghostykit components (`<Subagents>`, `ModelPicker`). | `"ghostykit"` |
 | `requires` | `{events, state}` it handles. Derived from `events`/`state`/`message.custom` if missing; in development a mismatch is a warning. | `{ events: ["ghosty.page"] }` |
 | `strings` | Texts over the locale's. | `{ stop: "Para" }` |
-| `markdown` | `transform` (chained) and `onLinkClick` (first that handles it). | `{ transform: (md) => md.replace(/#(\d+)/g, "[#$1](#folio-$1)") }` |
+| `markdown.transform` | Rewrites the answer's markdown, with the turn at hand (chained). | `(md, turn) => md.replace(/#(\d+)/g, "[#$1](#folio-$1)")` |
+| `markdown.onLinkClick` | A click on a link; `true` if handled (asked in order). | open in-app |
+| `markdown.blocks` | Fenced blocks by name (```` ```eb-file ````) taken out of the text and drawn as cards under the answer; one still being written comes with `complete: false`. | `{ "eb-file": FileCard }` |
 | `vars`, `className` | Branding on the root: `--piloto-*` tokens and classes. | `{ "--piloto-radius-bubble": "6px" }` |
 | `tools.verbs` | How each tool is named in the steps. | `{ run_cron: { one, many, running } }` |
 | `tools.icons` | Icon by tool name or `kind`. | `{ run_cron: Clock }` |
@@ -157,25 +160,36 @@ const PLUGINS = [crm, modelPicker({ onChange: (model) => api.setModel(model) }),
 | `events` | Handlers by AG-UI type, by `CUSTOM` name, or `*`. | `{ "ghosty.ui": (e, ctx) => board.open(e.value) }` |
 | `state` | Called when that key of `agentState` changes. | `{ model: (v, ctx) => … }` |
 | `message.custom` | Draws a `turn.custom` entry by its name (deliveries, CRM cards). | `{ "ghosty.delivery": DeliveryCard }` |
+| `message.assistantBefore` | Before each answer's text, under its steps. | live page progress, "Creating image…" |
 | `message.user` / `message.assistant` | Extras under each user message / answer. | `({ turn, live }) => …` |
 | `message.formatUserText` | How the user's text is shown (chained). | strip app plumbing |
-| `composer.actions` | Buttons in the composer bar. | model picker, "Point" |
+| `composer.actions` | Buttons in the composer bar, between the image button and the clip. | "My files", "Point" |
+| `composer.actionsEnd` | Buttons after the clip. | model picker |
 | `composer.above` | Above the message box. | `<Subagents pilot={ctx.pilot} />` |
+| `composer.below` | Under the message box. | suggestion chips |
 | `composer.attachments` | `upload`, `transcribe`, `voiceNoteText`. | `{ upload: async (f) => ({ url }) }` |
 | `header` | Top right, over the thread. | share button |
 | `sidePanel` | Next to the chat. | live page, subagents |
 | `aboveThread` | Above the messages. | a banner |
 | `empty` | The empty thread (instead of the greeting). | onboarding |
 | `waiting` | While the agent hasn't answered (instead of the waiting phrase). Gets `step`, `since`. | "Creating your image…" |
+| `wrap` | A provider around the whole chat (`{ctx, children}`); the first plugin is outermost. | artifacts panel |
+| `onTurnStart` / `onTurnDone` | This client started / finished a turn. | open the last delivery |
 
-Every view gets `ctx`: `{pilot, agentState, strings, send, addReference, setDraft, plugins}`.
+Every view gets `ctx`: `{pilot, agentState, strings, send, addReference, addAttachments, setDraft, focus, plugins}`.
+`addAttachments` takes `File`s (they go through `upload`) or ready `Attachment`s (e.g. from "My files"),
+and they can be sent without text. The `ref` of `<Piloto>` is the same handle (without `plugins`,
+`strings`, `agentState`), so the app never needs a separate `usePilot`: `ref.current.addReference(…)`,
+`ref.current.pilot.reconnect()` (when your own event bus says the thread changed),
+`ref.current.pilot.stop()`. `initialPrompt` sends a message as soon as the thread is open (a question
+in the URL).
 
 **Order and precedence**, in the order of the `plugins` list:
 
 - **Maps** (`strings`, `tools.verbs`, `tools.icons`, `vars`) are merged, and later plugins win. `markdown` and `formatUserText` are chained.
 - **`events` and `state`** call every handler, in order.
-- **Keyed or single views** (`tools.render`, `message.custom`, `empty`, `waiting`, `composer.attachments`): the first plugin that declares one wins. A clash is a development warning.
-- **Lists** (`header`, `sidePanel`, `aboveThread`, `composer.actions`/`above`, `message.user`/`assistant`) are all drawn, in order.
+- **Keyed or single views** (`tools.render`, `message.custom`, `markdown.blocks`, `empty`, `waiting`, `composer.attachments`): the first plugin that declares one wins. A clash is a development warning.
+- **Lists** (`header`, `sidePanel`, `aboveThread`, `composer.actions`/`actionsEnd`/`above`/`below`, `message.user`/`assistant`/`assistantBefore`, `wrap`, `onTurnStart`/`onTurnDone`) all apply, in order.
 
 In development, ghostykit also warns once about a `CUSTOM` event that nothing handles.
 

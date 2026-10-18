@@ -36,7 +36,7 @@ export function modelPicker({ stateKey = "model", onChange }: ModelPickerOptions
       />
     );
   }
-  return definePlugin({ name: "modelPicker", requires: { state: [stateKey] }, composer: { actions: Picker } });
+  return definePlugin({ name: "modelPicker", styles: "ghostykit", requires: { state: [stateKey] }, composer: { actionsEnd: Picker } });
 }
 
 // ── livePage ────────────────────────────────────────────────────────────────
@@ -128,7 +128,7 @@ export function livePage({ width = 320 }: LivePageOptions = {}): PilotoPlugin {
     );
   }
 
-  return definePlugin({ name: "livePage", requires: { events: ["ghosty.page"] }, events: { "ghosty.page": onPage }, sidePanel: Panel });
+  return definePlugin({ name: "livePage", styles: "ghostykit", requires: { events: ["ghosty.page"] }, events: { "ghosty.page": onPage }, sidePanel: Panel });
 }
 
 // ── pilotDevtools ───────────────────────────────────────────────────────────
@@ -157,6 +157,7 @@ export function pilotDevtools({ events = false }: DevtoolsOptions = {}): PilotoP
   }
   return definePlugin({
     name: "pilotDevtools",
+    styles: "ghostykit",
     aboveThread: Devtools,
     ...(events
       ? {

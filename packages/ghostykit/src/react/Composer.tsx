@@ -4,7 +4,7 @@
  * responde, enviar se vuelve parar; se puede seguir escribiendo (entra al turno como corrección).
  */
 import { ArrowUp, Check, ChevronDown, Cpu, FileText, Image as ImageIcon, Loader2, Mic, Paperclip, Square, X } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type ReactNode, type Ref } from "react";
 import type { Attachment, Reference } from "../core/types";
 
 /** Un modelo que la app ofrece elegir (AG-UI no lo define: la app lo manda en `forwardedProps`). */
@@ -23,7 +23,13 @@ export interface UploadResult {
   id?: string;
 }
 
-type Pending = { id: number; file: File; url: string };
+/** Un adjunto en la caja: un archivo por subir, o uno que ya viene listo (`att`, p. ej. de «Mis archivos»). */
+type Pending = { id: number; name: string; mime: string; size?: number; url: string; file?: File; att?: Attachment };
+
+/** Lo que se puede hacer con la caja desde afuera (`ctx.addAttachments`). */
+export interface ComposerHandle {
+  addAttachments: (items: (File | Attachment)[]) => void;
+}
 
 const BY_EXTENSION: Record<string, string> = {
   png: "image/png",
@@ -91,8 +97,12 @@ export interface ComposerProps {
   references?: Reference[];
   onRemoveReference?: (id: string) => void;
   onActivateReference?: (ref: Reference) => void;
-  /** Botones propios junto a adjuntar (slot `composerExtras`). */
+  /** Botones propios entre la imagen y el clip. */
   extras?: ReactNode;
+  /** Botones propios después del clip. */
+  extrasEnd?: ReactNode;
+  /** Para agregar adjuntos desde afuera. */
+  handleRef?: Ref<ComposerHandle>;
   maxFiles?: number;
   maxFileMb?: number;
 }
@@ -117,6 +127,8 @@ export function Composer({
   onRemoveReference,
   onActivateReference,
   extras,
+  extrasEnd,
+  handleRef,
   maxFiles = 8,
   maxFileMb = 25,
 }: ComposerProps) {
@@ -197,7 +209,7 @@ export function Composer({
           }
           const url = URL.createObjectURL(file);
           urls.current.add(url);
-          next.push({ id: ++nextId.current, file, url });
+          next.push({ id: ++nextId.current, name: file.name, mime, size: file.size, url, file });
         }
         return next;
       });
@@ -246,10 +258,34 @@ export function Composer({
     };
   }, [withFiles, busy, addFiles]);
 
+  useImperativeHandle(
+    handleRef,
+    () => ({
+      addAttachments: (items) => {
+        const files = items.filter((x): x is File => typeof File !== "undefined" && x instanceof File);
+        const ready = items.filter((x): x is Attachment => !(typeof File !== "undefined" && x instanceof File));
+        if (files.length) addFiles(files);
+        if (ready.length)
+          setFiles((prev) => [
+            ...prev,
+            ...ready.slice(0, Math.max(0, maxFiles - prev.length)).map((att) => ({
+              id: ++nextId.current,
+              name: att.name ?? "archivo",
+              mime: att.mimeType,
+              url: att.url ?? (att.data ? `data:${att.mimeType};base64,${att.data}` : ""),
+              att,
+            })),
+          ]);
+        ref.current?.focus({ preventScroll: true });
+      },
+    }),
+    [addFiles, maxFiles],
+  );
+
   const removeFile = (id: number) =>
     setFiles((prev) => {
       const out = prev.find((a) => a.id === id);
-      if (out) releaseUrl(out.url);
+      if (out?.file) releaseUrl(out.url);
       return prev.filter((a) => a.id !== id);
     });
 
@@ -264,7 +300,8 @@ export function Composer({
     try {
       atts = await Promise.all(
         files.map(async (a) => {
-          const mime = mimeOf(a.file);
+          if (a.att || !a.file) return a.att!;
+          const mime = a.mime;
           if (mime.startsWith("image/") || isText(mime)) return readInline(a.file);
           // Binario: se sube y viaja la URL (y su id); sin bytes en el turno.
           const up = await upload!(a.file);
@@ -280,7 +317,7 @@ export function Composer({
     onSubmit(body, atts);
     setValue("");
     setNotice(null);
-    for (const a of files) releaseUrl(a.url);
+    for (const a of files) if (a.file) releaseUrl(a.url);
     setFiles([]);
   };
 
@@ -406,18 +443,18 @@ export function Composer({
             {files.length > 1 ? t.uploadingN(files.length) : t.uploading}
           </p>
         )}
-        {withFiles && files.length > 0 && (
+        {files.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {files.map((a) => (
               <div key={a.id} className="relative h-16 w-16 overflow-hidden rounded-lg border border-border-primary bg-background-secondary">
-                {mimeOf(a.file).startsWith("image/") ? (
-                  <img src={a.url} alt={a.file.name} className="h-full w-full object-cover" />
+                {a.mime.startsWith("image/") && a.url ? (
+                  <img src={a.url} alt={a.name} className="h-full w-full object-cover" />
                 ) : (
                   // Un PDF pintado con <img> es un recuadro roto: nombre, extensión y peso.
-                  <span className="flex h-full w-full flex-col items-center justify-center gap-1 px-1 text-center" title={a.file.name}>
+                  <span className="flex h-full w-full flex-col items-center justify-center gap-1 px-1 text-center" title={a.name}>
                     <FileText className="h-4 w-4 shrink-0 text-text-tertiary" />
-                    <span className="w-full truncate text-[9px] font-medium uppercase leading-none text-text-secondary">{a.file.name.match(/\.([A-Za-z0-9]+)$/)?.[1] ?? "file"}</span>
-                    <span className="w-full truncate text-[9px] leading-none text-text-tertiary">{shortSize(a.file.size)}</span>
+                    <span className="w-full truncate text-[9px] font-medium uppercase leading-none text-text-secondary">{a.name.match(/\.([A-Za-z0-9]+)$/)?.[1] ?? "file"}</span>
+                    {a.size !== undefined && <span className="w-full truncate text-[9px] leading-none text-text-tertiary">{shortSize(a.size)}</span>}
                   </span>
                 )}
                 <button
@@ -525,6 +562,7 @@ export function Composer({
               </>
             )}
             {!withFiles && extras}
+            {extrasEnd}
             {models.length > 0 && onModelChange && <ModelPicker models={models} current={currentModel} onChange={onModelChange} />}
           </div>
           <div className="flex shrink-0 items-center gap-1.5">

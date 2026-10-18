@@ -30,6 +30,32 @@ function scopeOne(sel) {
   return `${SCOPE} ${s}`;
 }
 
+/**
+ * Lo que dibujan los plugins de la app (`[data-piloto-isolate]`) queda FUERA de estas reglas: las
+ * utilidades de ghostykit (`.piloto .hidden`) no pisan las clases de la app dentro de sus vistas. Se
+ * agrega `:not([data-piloto-isolate] *)` al último elemento del selector (antes de su pseudo-elemento).
+ * Las reglas de la raíz (`.piloto`, `.piloto[data-skin=…]`: las variables) no cambian: se heredan.
+ */
+const ISOLATE = ":not([data-piloto-isolate] *)";
+const PSEUDO_ELEMENT = /(::?(?:before|after|placeholder|marker|selection|backdrop|file-selector-button|first-line|first-letter|-webkit-[\w-]+|-moz-[\w-]+)(?:\([^)]*\))?)+$/;
+function isolateOne(sel) {
+  const s = sel.trim();
+  // Sólo lo que está DENTRO de la raíz.
+  const m = /^\.piloto(?:\[[^\]]*\]|:[\w-]+(?:\([^)]*\))?)*(?=[\s>+~])/.exec(s);
+  if (!m || s.length === m[0].length) return s;
+  const pe = PSEUDO_ELEMENT.exec(s);
+  return pe ? `${s.slice(0, pe.index)}${ISOLATE}${pe[0]}` : `${s}${ISOLATE}`;
+}
+const isolate = {
+  postcssPlugin: "piloto-isolate",
+  Once(root) {
+    root.walkRules((rule) => {
+      if (rule.parent?.type === "atrule" && /keyframes$/.test(rule.parent.name)) return;
+      rule.selectors = rule.selectors.map(isolateOne);
+    });
+  },
+};
+
 const scope = {
   postcssPlugin: "piloto-scope",
   Once(root) {
@@ -66,8 +92,8 @@ const remToVar = async (css) =>
   ).css;
 
 const tw = readFileSync(tmp, "utf8");
-const scoped = await remToVar((await postcss([scope]).process(tw, { from: tmp })).css);
-const base = await remToVar(readFileSync(join(pkg, "src/styles/base.css"), "utf8"));
+const scoped = await remToVar((await postcss([scope, isolate]).process(tw, { from: tmp })).css);
+const base = await remToVar((await postcss([isolate]).process(readFileSync(join(pkg, "src/styles/base.css"), "utf8"), { from: undefined })).css);
 const banner = "/* ghostykit — Ghosty Autopilot · MIT · https://github.com/blissito/ghostykit */\n";
 // La piel va DESPUÉS: a igual especificidad, sus piezas con nombre ganan a las utilidades.
 writeFileSync(join(pkg, "dist/styles.css"), `${banner}/* ── Utilidades (Tailwind v4, encerradas en .piloto) ── */\n${scoped}\n/* ── La piel ── */\n${base}`);

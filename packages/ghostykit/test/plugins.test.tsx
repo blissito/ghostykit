@@ -205,3 +205,105 @@ describe("ghostykit/plugins", () => {
     await act(async () => root.unmount());
   });
 });
+
+describe("0.7.0 con la lista de gs (/c)", () => {
+  it("extractBlocks saca los bloques con nombre (también el que se está escribiendo) y recorre los cortes", async () => {
+    const { extractBlocks } = await import("../src/core");
+    const text = "Reviso.\nTe dejo el archivo:\n```eb-file\n{\"id\":\"f1\"}\n```\nY el audio:\n```eb-audio\n{\"id\":\"a1";
+    const r = extractBlocks(text, ["eb-file", "eb-audio"], [7]);
+    expect(r.blocks).toEqual([
+      { lang: "eb-file", body: "{\"id\":\"f1\"}", complete: true },
+      { lang: "eb-audio", body: "{\"id\":\"a1", complete: false },
+    ]);
+    expect(r.text).toBe("Reviso.\nTe dejo el archivo:\n\nY el audio:\n");
+    expect(r.cuts).toEqual([7]);
+    expect(extractBlocks("```ts\ncode\n```", ["eb-file"]).blocks).toEqual([]);
+  });
+
+  it("un turno cerrado que acabó en un paso: lo último que dijo es la respuesta, no narración", async () => {
+    const { splitNarration } = await import("../src/core");
+    const text = "Reviso tus crons.Aquí está tu respuesta final.";
+    expect(splitNarration(text, [17, text.length])).toEqual({ steps: ["Reviso tus crons.", "Aquí está tu respuesta final."], rest: "" });
+    expect(splitNarration(text, [17, text.length], true)).toEqual({ steps: ["Reviso tus crons."], rest: "Aquí está tu respuesta final." });
+  });
+
+  it("markdown.blocks, markdown.transform(md, turn), message.assistantBefore, wrap, composer.below/actionsEnd y el aislamiento", () => {
+    const turns = [
+      { role: "user" as const, text: "hola" },
+      { id: "a7", role: "assistant" as const, text: "Listo:\n```eb-file\n{\"name\":\"cotizacion.pdf\"}\n```\nCualquier cosa me dices." },
+    ];
+    const gs = definePlugin({
+      name: "gs",
+      markdown: {
+        blocks: { "eb-file": ({ block }) => <span>{`tarjeta ${(JSON.parse(block.body) as { name: string }).name}`}</span> },
+        transform: (md, turn) => `${md} [${turn?.id}]`,
+      },
+      message: { assistantBefore: () => <span>antes-del-texto</span> },
+      wrap: ({ children }) => <section data-proveedor="">{children}</section>,
+      composer: { below: () => <span>chips-abajo</span>, actionsEnd: () => <span>tras-el-clip</span> },
+    });
+    const html = renderToString(<Piloto transport={null} pilot={fakePilot({ turns })} plugins={[gs, { name: "nuestro", styles: "ghostykit", header: () => <b>h</b> }]} />);
+    expect(html).toContain("tarjeta cotizacion.pdf");
+    expect(html).not.toContain("eb-file");
+    expect(html).toContain("[a7]");
+    expect(html.indexOf("antes-del-texto")).toBeLessThan(html.indexOf("Cualquier cosa"));
+    expect(html.startsWith("<section data-proveedor")).toBe(true);
+    expect(html).toContain("chips-abajo");
+    expect(html).toContain("tras-el-clip");
+    expect(html).toContain('data-plugin="gs" data-piloto-isolate=""');
+    expect(html).toMatch(/data-plugin="nuestro"(?! data-piloto-isolate)/);
+  });
+
+  it("el ref de <Piloto> es el mismo handle que ctx: addAttachments (sin texto), reconnect y onTurnDone de un plugin", async () => {
+    const inputs: RunAgentInputLike[] = [];
+    const transport: PilotTransport = {
+      async run(input, onEvent) {
+        inputs.push(input as unknown as RunAgentInputLike);
+        onEvent({ type: "RUN_STARTED", runId: input.runId } as unknown as BaseEvent);
+        onEvent({ type: "RUN_FINISHED", runId: input.runId, outcome: { type: "success" } } as unknown as BaseEvent);
+      },
+    };
+    const done: string[] = [];
+    const plugins = [definePlugin({ name: "fin", onTurnDone: (info) => void done.push(`fin ${info.runId ? "ok" : "?"}`) })];
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    const root = createRoot(el);
+    let api: import("../src/react").PilotoHandle | null = null;
+    await act(async () => root.render(<Piloto ref={(h) => void (api = h)} transport={transport} plugins={plugins} />));
+    expect(Object.keys(api!).sort()).toEqual(["addAttachments", "addReference", "focus", "pilot", "send", "setDraft"]);
+    await act(async () => api!.addAttachments([{ name: "contrato.pdf", mimeType: "application/pdf", url: "https://x.test/c.pdf" }]));
+    expect(el.textContent).toContain("pdf");
+    const sendBtn = el.querySelector('button[aria-label="Enviar"]') as HTMLButtonElement;
+    await act(async () => {
+      sendBtn.click();
+      await new Promise((r) => setTimeout(r, 10));
+    });
+    expect(inputs[0].messages[0].content).toEqual([{ type: "document", mimeType: "application/pdf", filename: "contrato.pdf", source: { type: "url", value: "https://x.test/c.pdf" } }]);
+    expect(done).toEqual(["fin ok"]);
+    await act(async () => void (await api!.pilot.reconnect()));
+    expect(inputs[1].messages).toEqual([]);
+    await act(async () => root.unmount());
+    el.remove();
+  });
+
+  it("initialPrompt sale en cuanto el hilo está abierto", async () => {
+    const order: string[] = [];
+    const transport: PilotTransport = {
+      async run(input, onEvent) {
+        order.push(input.messages.length ? `manda ${input.messages[0].content}` : "abre");
+        onEvent({ type: "RUN_STARTED", runId: input.runId } as unknown as BaseEvent);
+        onEvent({ type: "RUN_FINISHED", runId: input.runId, outcome: { type: "success" } } as unknown as BaseEvent);
+      },
+    };
+    const el = document.createElement("div");
+    const root = createRoot(el);
+    await act(async () => {
+      root.render(<Piloto transport={transport} threadId="44444444-4444-4444-8444-444444444444" initialPrompt="hazme la cotización" />);
+      await new Promise((r) => setTimeout(r, 10));
+    });
+    expect(order).toEqual(["abre", "manda hazme la cotización"]);
+    await act(async () => root.unmount());
+  });
+});
+
+type RunAgentInputLike = { messages: { content: unknown }[] };

@@ -3,12 +3,12 @@
 // app bajo la respuesta llega por `renderDeliveries` (en <Piloto>, de los plugins).
 import { ArrowUpRight, Check, Coins, Copy, Gauge, RotateCcw } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { splitNarration } from "../core/narration";
+import { extractBlocks, splitNarration, type TextBlock } from "../core/narration";
 import { cleanReplyOption, extractReplyOptions, type ReplyOptions } from "../core/options";
 import { systemNoteOf } from "../core/text";
 import type { Turn, Usage } from "../core/types";
 import { DecisionLines } from "./ConfirmCard";
-import { usePiloto } from "./context";
+import { TurnContext, usePiloto } from "./context";
 import { Markdown } from "./Markdown";
 import { AgentSteps, Narration } from "./Steps";
 import { useTextAtPace } from "./TextAtPace";
@@ -202,15 +202,23 @@ export interface AgentBubbleProps {
   renderDeliveries?: (turn: Turn, live: boolean) => ReactNode;
   /** Vistas propias de las herramientas, justo bajo los pasos. */
   renderTools?: (turn: Turn, live: boolean) => ReactNode;
+  /** Antes del texto de la respuesta, bajo sus pasos. */
+  renderBefore?: (turn: Turn, live: boolean) => ReactNode;
+  /** Bloques con nombre (```eb-file```) que salen del texto y se pintan como tarjetas bajo la respuesta. */
+  blocks?: { langs: string[]; render: (blocks: TextBlock[], turn: Turn, live: boolean) => ReactNode };
 }
 
-export function AgentBubble({ turn, live, onRetry, onOption, showUsage = true, showCopy = true, showDuration = true, renderDeliveries, renderTools }: AgentBubbleProps) {
+export function AgentBubble({ turn, live, onRetry, onOption, showUsage = true, showCopy = true, showDuration = true, renderDeliveries, renderTools, renderBefore, blocks }: AgentBubbleProps) {
   const { strings: t } = usePiloto();
-  const narrated = splitNarration(turn.text ?? "", turn.cuts);
+  const extracted = blocks ? extractBlocks(turn.text ?? "", blocks.langs, turn.cuts) : { text: turn.text ?? "", cuts: turn.cuts, blocks: [] };
+  // Cerrado y sin pasos esperando aprobación: si acabó en un paso, lo último que dijo es la respuesta.
+  const closed = !live && !turn.tools?.some((x) => x.status === "pending");
+  const narrated = splitNarration(extracted.text, extracted.cuts, closed);
   const visible = narrated.rest;
   // «Si quieres, puedo: …» al final de la última respuesta → botones.
   const options = onOption && !live && visible ? extractReplyOptions(visible) : null;
   return (
+    <TurnContext.Provider value={turn}>
     <div className="gc-msg-agent min-w-0 max-w-[90%]">
       {turn.thought && (
         <details className="mb-3 text-xs text-text-secondary">
@@ -220,6 +228,7 @@ export function AgentBubble({ turn, live, onRetry, onOption, showUsage = true, s
       )}
       {turn.tools && turn.tools.length > 0 && <AgentSteps tools={turn.tools} live={live} />}
       {turn.tools && turn.tools.length > 0 && renderTools?.(turn, live)}
+      {renderBefore?.(turn, live)}
       {narrated.steps.length > 0 && <Narration steps={narrated.steps} />}
       {options ? (
         <>
@@ -230,10 +239,12 @@ export function AgentBubble({ turn, live, onRetry, onOption, showUsage = true, s
         // Cada tramo nuevo tras una herramienta monta su propio ritmo (empieza de cero).
         visible && <AnswerText key={`r${narrated.steps.length}`} text={visible} live={live} />
       )}
+      {extracted.blocks.length > 0 && blocks!.render(extracted.blocks, turn, live)}
       {renderDeliveries?.(turn, live)}
       {turn.decisions?.length ? <DecisionLines decisions={turn.decisions} /> : null}
       {showUsage && turn.usage && <UsageStats {...turn.usage} />}
       {turn.text && !live && <TurnFooter text={turn.text} seconds={turn.seconds} onRetry={onRetry} showCopy={showCopy} showDuration={showDuration} />}
     </div>
+    </TurnContext.Provider>
   );
 }

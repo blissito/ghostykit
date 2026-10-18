@@ -21,7 +21,7 @@ export {
   toPermission,
 } from "./reducer";
 export { applyJsonPatch, type PatchOp } from "./jsonPatch";
-export { isNarration, narrationToMarkdown, splitNarration } from "./narration";
+export { extractBlocks, isNarration, narrationToMarkdown, splitNarration, type TextBlock } from "./narration";
 export { cleanReplyOption, extractReplyOptions, type ReplyOptions } from "./options";
 export {
   TOOL_VERBS_EN,

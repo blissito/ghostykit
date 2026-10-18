@@ -20,13 +20,14 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
+import type { TextBlock } from "../core/narration";
 import { isRunning, TOOL_VERBS_EN, TOOL_VERBS_ES } from "../core/steps";
 import { applyReferences, cleanUserText } from "../core/text";
 import type { Attachment, Decision, PermissionRequest, Reference, Turn } from "../core/types";
 import type { PilotTransport } from "../transport";
 import { AgentBubble, UserBubble } from "./Bubble";
 import { ReferenceChips, Suggestions } from "./Chips";
-import { Composer } from "./Composer";
+import { Composer, type ComposerHandle } from "./Composer";
 import { ConfirmCard } from "./ConfirmCard";
 import { PilotoContext, rootProps, usePiloto, type PilotoConfig, type PilotTheme } from "./context";
 import { BUILTIN_CUSTOM, isDev, resolvePlugins, type PilotoPlugin, type PluginCtx, type PluginEvent, type PluginView } from "./plugins";
@@ -86,14 +87,11 @@ export interface PilotoProps extends UsePilotOptions {
   plugins?: readonly PilotoPlugin[];
 }
 
-/** Lo que la app puede hacer desde afuera (`<Piloto ref={…} />`). */
-export interface PilotoHandle {
-  send: (text: string, attachments?: Attachment[]) => void;
-  addReference: (ref: Reference) => void;
-  /** Escribe en la caja sin mandar. */
-  setDraft: (text: string) => void;
-  focus: () => void;
-}
+/**
+ * Lo que la app puede hacer desde afuera (`<Piloto ref={…} />`): lo MISMO que recibe un plugin en
+ * `ctx`. Con `pilot` (estado, `reconnect`, `stop`, `continueRun`…) nadie necesita `usePilot` aparte.
+ */
+export type PilotoHandle = Omit<PluginCtx, "plugins" | "strings" | "agentState">;
 
 const useIsoLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
@@ -173,34 +171,24 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
     [pilot, setRefs],
   );
 
-  useImperativeHandle(
-    handle,
-    () => ({
-      send,
-      addReference: (r) => {
-        const current = refsRef.current;
-        if (!current.some((x) => x.id === r.id)) setRefs([...current, r]);
-        requestAnimationFrame(() => composerBox.current?.querySelector("textarea")?.focus({ preventScroll: true }));
-      },
-      setDraft: (text) => setDraftState((d) => ({ text, n: d.n + 1 })),
-      focus: () => composerBox.current?.querySelector("textarea")?.focus({ preventScroll: true }),
-    }),
-    [send, setRefs],
-  );
-
-  // ── Plugins: el contexto que reciben, sus eventos y su estado ──────────────────
-  const ctx: PluginCtx = {
-    pilot,
-    agentState: state.agentState,
-    strings,
-    send,
-    addReference: (r) => {
+  // ── Lo que se puede hacer desde afuera: el `ref` de <Piloto> y el `ctx` de los plugins ───────
+  const composerHandle = useRef<ComposerHandle>(null);
+  const focus = useCallback(() => composerBox.current?.querySelector("textarea")?.focus({ preventScroll: true }), []);
+  const addReference = useCallback(
+    (r: Reference) => {
       const current = refsRef.current;
       if (!current.some((x) => x.id === r.id)) setRefs([...current, r]);
+      requestAnimationFrame(focus);
     },
-    setDraft: (text) => setDraftState((d) => ({ text, n: d.n + 1 })),
-    plugins: plugins.list,
-  };
+    [setRefs, focus],
+  );
+  const setDraft = useCallback((text: string) => setDraftState((d) => ({ text, n: d.n + 1 })), []);
+  const addAttachments = useCallback((items: (File | Attachment)[]) => composerHandle.current?.addAttachments(items), []);
+  const actions: PilotoHandle = { pilot, send, addReference, addAttachments, setDraft, focus };
+  useImperativeHandle(handle, () => actions, [pilot, send, addReference, addAttachments, setDraft, focus]);
+
+  // ── Plugins: el contexto que reciben, sus eventos y su estado ──────────────────
+  const ctx: PluginCtx = { ...actions, agentState: state.agentState, strings, plugins: plugins.list };
   const ctxRef = useRef(ctx);
   ctxRef.current = ctx;
   const pluginsRef = useRef(plugins);
@@ -247,6 +235,23 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
       }
     }
   }, [state.agentState, plugins]);
+
+  useEffect(
+    () =>
+      pilot.onTurn?.((e) => {
+        const r = pluginsRef.current;
+        const run = (plugin: string, fn: () => void) => {
+          try {
+            fn();
+          } catch (err) {
+            console.error(`[ghostykit] el plugin «${plugin}» falló al ${e.type === "start" ? "empezar" : "terminar"} el turno`, err);
+          }
+        };
+        if (e.type === "start") for (const h of r.turnStart) run(h.plugin, () => h.value(ctxRef.current));
+        else for (const h of r.turnDone) run(h.plugin, () => h.value(e.info, ctxRef.current));
+      }),
+    [pilot.onTurn],
+  );
 
   // Una tarjeta contestada se queda a la vista mientras cae su sello (el run que la contesta puede
   // traer un snapshot que ya no la incluye).
@@ -316,6 +321,12 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
   useEffect(() => {
     if (mine === mineSeen.current) return;
     mineSeen.current = mine;
+    // Al ABRIR un hilo (snapshot, sin turno de este cliente) no se ancla tu último mensaje arriba: se
+    // va al final y lo sigue aunque el contenido crezca después (imágenes que cargan tarde).
+    if (!state.turnStartedAt) {
+      following.current = true;
+      return;
+    }
     // `data-turn` cuenta desde el snapshot: lo anterior (`loadOlder`) va en negativo y no lo mueve.
     if (mine) setAnchor(mineIndex - olderCount);
     following.current = true;
@@ -402,7 +413,9 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
         references={plainRefs}
         onRemoveReference={removeRef}
         onActivateReference={props.onReferenceClick}
-        extras={plugins.composerActions.length ? <Views items={plugins.composerActions} ctx={ctx} inline /> : undefined}
+        extras={plugins.composerActions.length ? <Views items={plugins.composerActions} ctx={ctx} styled={plugins.ghostykitStyled} inline /> : undefined}
+        extrasEnd={plugins.composerActionsEnd.length ? <Views items={plugins.composerActionsEnd} ctx={ctx} styled={plugins.ghostykitStyled} inline /> : undefined}
+        handleRef={composerHandle}
       />
     </div>
   );
@@ -412,14 +425,17 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
     plugins.sidePanel.length ? (
       <div className="flex min-h-0 flex-1 flex-row">
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">{chat}</div>
-        <Views items={plugins.sidePanel} ctx={ctx} className="flex min-h-0 shrink-0" />
+        <Views items={plugins.sidePanel} ctx={ctx} styled={plugins.ghostykitStyled} className="flex min-h-0 shrink-0" />
       </div>
     ) : (
       chat
     );
 
-  const aboveComposer = plugins.composerAbove.length ? <Views items={plugins.composerAbove} ctx={ctx} /> : null;
-  const header = plugins.header.length ? <Views items={plugins.header} ctx={ctx} inline /> : null;
+  const aboveComposer = plugins.composerAbove.length ? <Views items={plugins.composerAbove} ctx={ctx} styled={plugins.ghostykitStyled} /> : null;
+  const belowComposer = plugins.composerBelow.length ? <Views items={plugins.composerBelow} ctx={ctx} styled={plugins.ghostykitStyled} /> : null;
+  const header = plugins.header.length ? <Views items={plugins.header} ctx={ctx} styled={plugins.ghostykitStyled} inline /> : null;
+  /** Los atributos del envoltorio de lo que dibuja un plugin: su nombre y, si es de la app, el aislamiento. */
+  const mark = (plugin: string) => pluginAttrs(plugin, plugins.ghostykitStyled);
   const Empty = plugins.empty?.value;
   const Waiting = plugins.waiting?.value;
 
@@ -430,13 +446,13 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
       if (!owner) return null;
       const C = owner.value;
       return (
-        <div key={`c${i}`} data-plugin={owner.plugin}>
+        <div key={`c${i}`} {...mark(owner.plugin)}>
           <C ctx={ctx} entry={entry} turn={turn} live={live} />
         </div>
       );
     });
     const extras = plugins.messageAssistant.map((o, i) => (
-      <div key={`a${i}`} data-plugin={o.plugin}>
+      <div key={`a${i}`} {...mark(o.plugin)}>
         <o.value ctx={ctx} turn={turn} live={live} />
       </div>
     ));
@@ -454,13 +470,49 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
       if (!owner) return [];
       const C = owner.value;
       return [
-        <div key={tool.id} data-plugin={owner.plugin}>
+        <div key={tool.id} {...mark(owner.plugin)}>
           <C ctx={ctx} tool={tool} turn={turn} live={live} />
         </div>,
       ];
     });
     return views.length ? <div className="mb-3 flex flex-col gap-2">{views}</div> : null;
   };
+  // Antes del texto de cada respuesta.
+  const renderBefore = plugins.messageBefore.length
+    ? (turn: Turn, live: boolean) => (
+        <>
+          {plugins.messageBefore.map((o, i) => (
+            <div key={i} {...mark(o.plugin)}>
+              <o.value ctx={ctx} turn={turn} live={live} />
+            </div>
+          ))}
+        </>
+      )
+    : undefined;
+  // Los bloques con nombre del texto (```eb-file```), como tarjetas.
+  const blockLangs = Object.keys(plugins.blockRenders);
+  const blocks = blockLangs.length
+    ? {
+        langs: blockLangs,
+        render: (list: TextBlock[], turn: Turn, live: boolean) => (
+          <div className="mt-2 flex flex-col gap-2">
+            {list.map((block, i) => {
+              const owner = plugins.blockRenders[block.lang];
+              const C = owner.value;
+              return (
+                <div key={i} {...mark(owner.plugin)}>
+                  <C ctx={ctx} block={block} turn={turn} live={live} />
+                </div>
+              );
+            })}
+          </div>
+        ),
+      }
+    : undefined;
+
+  // `wrap`: proveedores alrededor de TODO el chat; el primer plugin queda afuera.
+  const wrapAll = (tree: ReactNode) =>
+    plugins.wraps.reduceRight<ReactNode>((inner, { value: W }) => <W ctx={ctx}>{inner}</W>, tree);
 
   const permissionCards = cards.map((p: PermissionRequest) => (
     <ConfirmCard key={p.id} request={p} onRespond={respond} onSettled={settle} onExpire={pilot.expirePermission} />
@@ -470,6 +522,7 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
   // 784 px, composer abajo), mismas clases.
   return (
     <PilotoContext.Provider value={config}>
+      {wrapAll(
       <div
         {...rootProps(theme, props.skin)}
         data-busy={busy || undefined}
@@ -482,7 +535,7 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
           <div className="gs-scroll flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-4 pb-[10vh] [justify-content:safe_center]">
             {header && <div className="absolute right-4 top-3 flex gap-2">{header}</div>}
             {Empty ? (
-              <div data-plugin={plugins.empty!.plugin}>
+              <div {...mark(plugins.empty!.plugin)}>
                 <Empty ctx={ctx} />
               </div>
             ) : (
@@ -505,6 +558,7 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
             <div className="w-full max-w-3xl">
               {aboveComposer}
               {composer}
+              {belowComposer}
               {props.suggestions && <Suggestions items={props.suggestions} onPick={(s) => send(s)} onPrefill={(s) => setDraftState((d) => ({ text: s, n: d.n + 1 }))} />}
             </div>
           </div>
@@ -526,7 +580,7 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
               className="gs-scroll relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
             >
               <div ref={column} className="mx-auto flex w-full max-w-[784px] flex-col gap-6 px-4 py-8 sm:px-6">
-                {plugins.aboveThread.length > 0 && <Views items={plugins.aboveThread} ctx={ctx} />}
+                {plugins.aboveThread.length > 0 && <Views items={plugins.aboveThread} ctx={ctx} styled={plugins.ghostykitStyled} />}
                 {state.history?.hasMoreBefore && (external || props.loadOlder) && (
                   <button
                     type="button"
@@ -546,7 +600,7 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
                         <>
                           <UserBubble turn={turn} />
                           {plugins.messageUser.map((o, j) => (
-                            <div key={j} data-plugin={o.plugin}>
+                            <div key={j} {...mark(o.plugin)}>
                               <o.value ctx={ctx} turn={turn} />
                             </div>
                           ))}
@@ -562,6 +616,8 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
                           showDuration={features.duration !== false}
                           renderDeliveries={renderDeliveries}
                           renderTools={renderTools}
+                          renderBefore={renderBefore}
+                          blocks={blocks}
                         />
                       )}
                       {turn.role === "assistant" && <TurnNotes turn={turn} />}
@@ -579,7 +635,7 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
                 {permissionCards}
                 {busy && !toolRunning && !cards.length && (
                   Waiting ? (
-                    <div data-plugin={plugins.waiting!.plugin}>
+                    <div {...mark(plugins.waiting!.plugin)}>
                       <Waiting ctx={ctx} step={state.step} since={state.turnStartedAt} />
                     </div>
                   ) : (
@@ -620,10 +676,12 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
               )}
               {aboveComposer}
               {composer}
+              {belowComposer}
             </div>
           </>
         ))}
-      </div>
+      </div>,
+      )}
     </PilotoContext.Provider>
   );
 });
@@ -637,16 +695,24 @@ function warnOnce(message: string) {
 }
 
 /** Los componentes de varios plugins, en orden, cada uno marcado con su nombre. */
-function Views({ items, ctx, inline, className }: { items: { plugin: string; value: PluginView }[]; ctx: PluginCtx; inline?: boolean; className?: string }) {
+/**
+ * Lo que dibuja un plugin va marcado con su nombre. Si sus estilos son de la app (default), además
+ * con `data-piloto-isolate`: las utilidades de ghostykit no entran ahí y no pisan las clases de la app.
+ */
+function pluginAttrs(plugin: string, styled: Set<string>): { "data-plugin": string; "data-piloto-isolate"?: "" } {
+  return styled.has(plugin) ? { "data-plugin": plugin } : { "data-plugin": plugin, "data-piloto-isolate": "" };
+}
+
+function Views({ items, ctx, inline, className, styled }: { items: { plugin: string; value: PluginView }[]; ctx: PluginCtx; inline?: boolean; className?: string; styled: Set<string> }) {
   return (
     <>
       {items.map(({ plugin, value: C }) =>
         inline ? (
-          <span key={plugin} data-plugin={plugin} className="contents">
+          <span key={plugin} {...pluginAttrs(plugin, styled)} style={{ display: "contents" }}>
             <C ctx={ctx} />
           </span>
         ) : (
-          <div key={plugin} data-plugin={plugin} className={className}>
+          <div key={plugin} {...pluginAttrs(plugin, styled)} className={className}>
             <C ctx={ctx} />
           </div>
         ),

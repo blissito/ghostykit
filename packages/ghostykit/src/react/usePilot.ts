@@ -34,6 +34,9 @@ export interface TurnDoneInfo {
   interrupted?: boolean;
 }
 
+/** El inicio o el fin de un turno de este cliente. */
+export type TurnEvent = { type: "start" } | { type: "done"; info: TurnDoneInfo };
+
 export interface UsePilotOptions {
   /** El hilo (AG-UI `threadId`). Con él, al montar se pide el hilo guardado (MESSAGES_SNAPSHOT). Sin él, hilo nuevo. */
   threadId?: string;
@@ -51,6 +54,8 @@ export interface UsePilotOptions {
   onTitle?: (title?: string) => void;
   /** Cada evento AG-UI crudo, antes del reductor (analítica, STATE_*, CUSTOM propios). */
   onEvent?: (event: BaseEvent) => void;
+  /** Un mensaje que sale solo en cuanto el hilo está abierto (p. ej. `?enviar=1` con la pregunta en la URL). */
+  initialPrompt?: string;
   /** Cada run que sale (analítica). */
   onSend?: (input: RunAgentInput) => void;
   /** El estado del agente cambió (`STATE_SNAPSHOT` / `STATE_DELTA` ya aplicado). */
@@ -104,6 +109,10 @@ export interface Pilot {
    * por fuera que algo cambió (p. ej. el bus `/me/events` avisa que un subagente terminó).
    */
   refresh: () => Promise<void>;
+  /** Vuelve a leer el hilo (igual que `refresh`): para una reconexión que decide la app (p. ej. su bus de eventos). */
+  reconnect: () => Promise<void>;
+  /** Escucha el inicio y el fin de cada turno de este cliente. Regresa cómo dejar de escuchar. */
+  onTurn: (listener: (event: TurnEvent) => void) => () => void;
   /** Escucha cada evento AG-UI de este piloto (como `onEvent`, pero desde afuera). Regresa cómo dejar de escuchar. */
   subscribe: (listener: (event: BaseEvent) => void) => () => void;
   /** Continúa el run que el servidor cortó (`state.cutRun`): `forwardedProps.continueRun`. */
@@ -170,6 +179,12 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
   /** Cuántas veces se rechazó cada texto en espera (por el id del mensaje con que salió). */
   const queuedTries = useRef(new Map<string, number>());
   const flushRef = useRef<() => void>(() => {});
+  /** Quien escucha el inicio y el fin de cada turno de este cliente (los plugins de <Piloto>). */
+  const turnListeners = useRef(new Set<(e: TurnEvent) => void>());
+  const onTurn = useCallback((fn: (e: TurnEvent) => void) => {
+    turnListeners.current.add(fn);
+    return () => void turnListeners.current.delete(fn);
+  }, []);
   /** Quien escucha cada evento AG-UI (los plugins de <Piloto>, devtools). */
   const listeners = useRef(new Set<(e: BaseEvent) => void>());
   const subscribe = useCallback((fn: (e: BaseEvent) => void) => {
@@ -193,8 +208,14 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
     setState(next);
     const o = optsRef.current;
     for (const e of next.effects) {
-      if (e.type === "turn-start") o.onTurnStart?.();
-      else if (e.type === "turn-done") o.onTurnDone?.({ text: e.text, runId: e.runId, seconds: e.seconds, error: e.error, interrupted: e.interrupted });
+      if (e.type === "turn-start") {
+        o.onTurnStart?.();
+        for (const fn of turnListeners.current) fn({ type: "start" });
+      } else if (e.type === "turn-done") {
+        const info: TurnDoneInfo = { text: e.text, runId: e.runId, seconds: e.seconds, error: e.error, interrupted: e.interrupted };
+        o.onTurnDone?.(info);
+        for (const fn of turnListeners.current) fn({ type: "done", info });
+      }
       else if (e.type === "title") o.onTitle?.(e.title);
       else if (e.type === "state") o.onState?.(e.state);
     }
@@ -292,11 +313,25 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
     [commit, threadId],
   );
 
-  // Abrir un hilo existente: su historia y, si está en pausa, sus tarjetas.
+  // Abrir un hilo existente: su historia y, si está en pausa, sus tarjetas. Con `initialPrompt`, ese
+  // mensaje sale en cuanto el hilo está abierto (y su run vivo, si había, terminó).
+  const sentInitial = useRef(false);
   useEffect(() => {
-    if (!transport || !opts.threadId) return;
-    void runNow({ messages: [] }, true);
-    return () => ctrl.current?.abort();
+    if (!transport) return;
+    let alive = true;
+    const sendInitial = () => {
+      const prompt = optsRef.current.initialPrompt;
+      if (!alive || !prompt || sentInitial.current) return;
+      sentInitial.current = true;
+      void sendRef.current(prompt);
+    };
+    if (opts.threadId) void runNow({ messages: [] }, true).then(sendInitial);
+    // En un tick: el doble montaje de StrictMode no lo manda dos veces ni lo aborta.
+    else setTimeout(sendInitial, 0);
+    return () => {
+      alive = false;
+      ctrl.current?.abort();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transport]);
 
@@ -306,6 +341,7 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
     ...[...answers.current.entries()].map(([interruptId, a]) => ({ interruptId, ...a })),
   ];
 
+  const sendRef = useRef<(text: string) => Promise<void>>(async () => {});
   const steerOn = () => optsRef.current.steer ?? ((ref.current.agentState.caps as { steer?: unknown } | undefined)?.steer === true);
 
   const send = useCallback(
@@ -325,6 +361,8 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [commit, runNow],
   );
+
+  sendRef.current = (text: string) => send(text);
 
   /** Un run nuevo con el mensaje. `tries`: cuántas veces ya se rechazó (mensajes en espera). */
   const sendNew = useCallback(
@@ -465,5 +503,5 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
   const canSteer = Boolean(transport) && (opts.steer ?? ((state.agentState.caps as { steer?: unknown } | undefined)?.steer === true));
   const subagents = useMemo(() => subagentsOf(state.agentState), [state.agentState]);
 
-  return { state, threadId, send, stop, retry, respondPermission, recordDecision, expirePermission, canSteer, loadOlder, loadingOlder, subagents, stopSubagent, refresh, continueRun, subscribe };
+  return { state, threadId, send, stop, retry, respondPermission, recordDecision, expirePermission, canSteer, loadOlder, loadingOlder, subagents, stopSubagent, refresh, reconnect: refresh, continueRun, subscribe, onTurn };
 }

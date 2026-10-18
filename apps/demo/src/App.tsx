@@ -23,6 +23,7 @@ const PLUGINS = [crons, modelPicker({ onChange: (value) => setMockModel(value) }
 // `?parity=1`: lo mismo que /c de Ghosty, «Mis archivos» incluido.
 const misArchivos = definePlugin({
   name: "misArchivos",
+  styles: "ghostykit",
   composer: {
     attachments: { upload: async (f) => ({ url: URL.createObjectURL(f) }), transcribe: async () => "" },
     actions: () => (

@@ -11,13 +11,13 @@ export {
   type PluginView,
   type ResolvedPlugins,
 } from "./plugins";
-export { toAgUiContext, usePilot, type Pilot, type SendOptions, type TurnDoneInfo, type UsePilotOptions } from "./usePilot";
+export { toAgUiContext, usePilot, type Pilot, type SendOptions, type TurnDoneInfo, type TurnEvent, type UsePilotOptions } from "./usePilot";
 export { AgentBubble, CopyUserMessage, ReplyOptionButtons, TurnFooter, UsageStats, UserBubble, type AgentBubbleProps } from "./Bubble";
 export { AgentSteps, ArcadeIcon, ClawIcon, DEFAULT_TOOL_ICONS, Narration, RobotArmIcon, ToolRow } from "./Steps";
 export { LinkSafetyModal, Markdown } from "./Markdown";
 export { InlineMarkdown, renderInline } from "./InlineMarkdown";
 export { useTextAtPace } from "./TextAtPace";
-export { Composer, ModelPicker, mimeOf, type ComposerProps, type ModelOption, type UploadResult } from "./Composer";
+export { Composer, ModelPicker, mimeOf, type ComposerHandle, type ComposerProps, type ModelOption, type UploadResult } from "./Composer";
 export { ConfirmCard, DecisionLines } from "./ConfirmCard";
 export { ReferenceChips, Suggestions } from "./Chips";
 export { TypingDots, WaitLabel } from "./Status";

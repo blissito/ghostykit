@@ -1,9 +1,9 @@
 // Markdown en streaming (Streamdown). PORTADO de Ghosty Studio (`Markdown.tsx`, `LinkSafetyModal.tsx`):
 // mismo `.ghosty-md`, mismo aviso de enlace externo. Las tarjetas del CRM de Ghosty van por `transform`.
 import { Check, ExternalLink, X } from "lucide-react";
-import { useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useContext, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { Streamdown, type LinkSafetyModalProps } from "streamdown";
-import { rootProps, usePiloto } from "./context";
+import { rootProps, TurnContext, usePiloto } from "./context";
 import { ChunkedBlock, ChunksContext, useChunkRegistry } from "./TextAtPace";
 
 /** El aviso de enlace externo, en la lengua y el tema de Piloto (el de Streamdown llega en inglés). */
@@ -77,7 +77,8 @@ const linkSafety = { enabled: true, renderModal: (p: LinkSafetyModalProps) => <L
 export function Markdown({ children, animate = false, className }: { children: string; animate?: boolean; className?: string }) {
   const { markdown } = usePiloto();
   const registry = useChunkRegistry();
-  const text = markdown.transform ? markdown.transform(children) : children;
+  const turn = useContext(TurnContext);
+  const text = markdown.transform ? markdown.transform(children, turn) : children;
   const onClick = markdown.onLinkClick
     ? (e: ReactMouseEvent) => {
         const a = (e.target as HTMLElement).closest("a[href]") as HTMLAnchorElement | null;

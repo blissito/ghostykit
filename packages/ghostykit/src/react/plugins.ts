@@ -8,14 +8,15 @@
 //     PRIMER plugin que lo declara (en desarrollo se avisa del choque);
 //   · listas (header, sidePanel, aboveThread, composer.actions/above, message.user/assistant): se
 //     dibujan todos, en orden, cada uno envuelto en `data-plugin="<name>"`.
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import type { BaseEvent } from "@ag-ui/core";
+import type { TextBlock } from "../core/narration";
 import type { ToolVerbs } from "../core/steps";
 import type { Attachment, CustomEntry, Reference, ToolEntry, Turn } from "../core/types";
 import type { UploadResult } from "./Composer";
 import type { MarkdownOptions, PilotIcon } from "./context";
 import type { PilotStrings } from "./strings";
-import type { Pilot } from "./usePilot";
+import type { Pilot, TurnDoneInfo } from "./usePilot";
 
 /** Lo que todo plugin recibe: el piloto, el estado del agente y las acciones del chat. */
 export interface PluginCtx {
@@ -27,6 +28,13 @@ export interface PluginCtx {
   addReference: (ref: Reference) => void;
   /** Escribe en la caja sin mandar. */
   setDraft: (text: string) => void;
+  /**
+   * Agrega adjuntos a la caja, como si la persona los eligiera: `File` pasa por `upload`; un
+   * `Attachment` (ya subido, p. ej. de «Mis archivos») va tal cual. Se mandan con o sin texto.
+   */
+  addAttachments: (items: (File | Attachment)[]) => void;
+  /** Pone el foco en la caja. */
+  focus: () => void;
   /** Los plugins montados, en orden. */
   plugins: readonly PilotoPlugin[];
 }
@@ -37,9 +45,28 @@ export type PluginView<P = object> = ComponentType<P & { ctx: PluginCtx }>;
 /** Un evento AG-UI como lo recibe `events` (los CUSTOM traen `name` y `value`). */
 export type PluginEvent = BaseEvent & { name?: string; value?: unknown; [k: string]: unknown };
 
+/** El markdown de las respuestas, desde un plugin. */
+export interface PluginMarkdown {
+  /** Reescribe el markdown antes de pintarlo, con el turno a la mano. Se encadena en orden. */
+  transform?: (md: string, turn?: Turn) => string;
+  /** Un clic en un enlace: `true` si el plugin lo manejó. Se pregunta en orden. */
+  onLinkClick?: MarkdownOptions["onLinkClick"];
+  /**
+   * Bloques con nombre del texto (```eb-file …```) que se pintan como tarjeta y salen del markdown,
+   * por su nombre. Uno a medio escribir llega con `complete: false`.
+   */
+  blocks?: Record<string, PluginView<{ block: TextBlock; turn: Turn; live: boolean }>>;
+}
+
 export interface PilotoPlugin {
   /** Único: aparece en `data-plugin`, en los avisos y en `pilotDevtools()`. */
   name: string;
+  /**
+   * De quién son los estilos de lo que dibuja. `host` (default): de la app; las utilidades de
+   * ghostykit no lo tocan. `ghostykit`: usa las clases de ghostykit (para componentes de ghostykit
+   * como `<Subagents>` o `ModelPicker`).
+   */
+  styles?: "host" | "ghostykit";
   /**
    * Lo que el plugin atiende, como documentación visible. Si falta, se deriva de `events`, `state` y
    * `message.custom`; si está y no coincide, en desarrollo se avisa.
@@ -48,8 +75,7 @@ export interface PilotoPlugin {
 
   /** Textos (se combinan sobre los del idioma). */
   strings?: Partial<PilotStrings>;
-  /** `transform` se encadena en orden; `onLinkClick` se pregunta en orden hasta que uno lo maneje. */
-  markdown?: MarkdownOptions;
+  markdown?: PluginMarkdown;
   /** Variables `--piloto-*` y clases extra para la raíz (branding fino sobre la piel). */
   vars?: Record<string, string>;
   className?: string;
@@ -73,6 +99,8 @@ export interface PilotoPlugin {
     user?: PluginView<{ turn: Turn }>;
     /** Bajo cada respuesta. */
     assistant?: PluginView<{ turn: Turn; live: boolean }>;
+    /** Antes del texto de cada respuesta, bajo sus pasos (avance de una página, «creando imagen»). */
+    assistantBefore?: PluginView<{ turn: Turn; live: boolean }>;
     /** Una entrada de `turn.custom` por su nombre (`ghosty.delivery`, tarjetas CRM…). */
     custom?: Record<string, PluginView<{ entry: CustomEntry; turn: Turn; live: boolean }>>;
     /** El texto del usuario como se pinta (se encadena en orden). */
@@ -80,8 +108,12 @@ export interface PilotoPlugin {
   };
 
   composer?: {
-    /** Botones en la barra del composer (selector de modelo, «Señalar»…). */
+    /** Botones en la barra del composer, entre la imagen y el clip («Mis archivos», «Señalar»). */
     actions?: PluginView;
+    /** Botones en la barra del composer, después del clip (selector de modelo). */
+    actionsEnd?: PluginView;
+    /** Bajo la caja (chips de sugerencias en el hilo vacío). */
+    below?: PluginView;
     /** Pegado arriba de la caja (chips, avisos, subagentes). */
     above?: PluginView;
     /** Adjuntos y voz. */
@@ -102,6 +134,12 @@ export interface PilotoPlugin {
   empty?: PluginView;
   /** Lo que se ve mientras el agente no contesta (en lugar de la frase de espera). */
   waiting?: PluginView<{ step: string | null; since: number }>;
+  /** Envuelve TODO el chat (un proveedor: panel de artefactos, contexto propio). El primero va afuera. */
+  wrap?: ComponentType<{ ctx: PluginCtx; children: ReactNode }>;
+  /** Este cliente mandó un turno. */
+  onTurnStart?: (ctx: PluginCtx) => void;
+  /** Terminó un turno de este cliente (abrir la última entrega, re-leer datos). */
+  onTurnDone?: (info: TurnDoneInfo, ctx: PluginCtx) => void;
 }
 
 /** Ayuda de tipos: `definePlugin({ name: "crm", … })`. */
@@ -123,6 +161,7 @@ export interface ResolvedPlugins {
   className: string;
   toolRenders: Record<string, Owned<NonNullable<NonNullable<PilotoPlugin["tools"]>["render"]>[string]>>;
   customRenders: Record<string, Owned<NonNullable<NonNullable<PilotoPlugin["message"]>["custom"]>[string]>>;
+  blockRenders: Record<string, Owned<NonNullable<PluginMarkdown["blocks"]>[string]>>;
   attachments: NonNullable<NonNullable<PilotoPlugin["composer"]>["attachments"]>;
   empty?: Owned<PluginView>;
   waiting?: Owned<NonNullable<PilotoPlugin["waiting"]>>;
@@ -131,6 +170,14 @@ export interface ResolvedPlugins {
   aboveThread: Owned<PluginView>[];
   composerActions: Owned<PluginView>[];
   composerAbove: Owned<PluginView>[];
+  composerActionsEnd: Owned<PluginView>[];
+  composerBelow: Owned<PluginView>[];
+  messageBefore: Owned<NonNullable<NonNullable<PilotoPlugin["message"]>["assistantBefore"]>>[];
+  wraps: Owned<NonNullable<PilotoPlugin["wrap"]>>[];
+  turnStart: Owned<NonNullable<PilotoPlugin["onTurnStart"]>>[];
+  turnDone: Owned<NonNullable<PilotoPlugin["onTurnDone"]>>[];
+  /** Los plugins cuyos dibujos usan los estilos de ghostykit (`styles: "ghostykit"`). */
+  ghostykitStyled: Set<string>;
   messageUser: Owned<NonNullable<NonNullable<PilotoPlugin["message"]>["user"]>>[];
   messageAssistant: Owned<NonNullable<NonNullable<PilotoPlugin["message"]>["assistant"]>>[];
   events: Record<string, Owned<NonNullable<PilotoPlugin["events"]>[string]>[]>;
@@ -154,25 +201,32 @@ export function pluginPoints(p: PilotoPlugin): string[] {
   const out: string[] = [];
   const add = (cond: unknown, name: string) => cond && out.push(name);
   add(p.strings, "strings");
-  add(p.markdown, "markdown");
+  add(p.markdown?.transform || p.markdown?.onLinkClick, "markdown");
   add(p.vars || p.className, "branding");
   add(p.tools?.verbs, "tools.verbs");
   add(p.tools?.icons, "tools.icons");
   for (const k of Object.keys(p.tools?.render ?? {})) out.push(`tools.render[${k}]`);
   for (const k of Object.keys(p.events ?? {})) out.push(`events[${k}]`);
   for (const k of Object.keys(p.state ?? {})) out.push(`state[${k}]`);
+  for (const k of Object.keys(p.markdown?.blocks ?? {})) out.push(`markdown.blocks[${k}]`);
+  add(p.message?.assistantBefore, "message.assistantBefore");
   add(p.message?.user, "message.user");
   add(p.message?.assistant, "message.assistant");
   for (const k of Object.keys(p.message?.custom ?? {})) out.push(`message.custom[${k}]`);
   add(p.message?.formatUserText, "message.formatUserText");
   add(p.composer?.actions, "composer.actions");
+  add(p.composer?.actionsEnd, "composer.actionsEnd");
   add(p.composer?.above, "composer.above");
+  add(p.composer?.below, "composer.below");
   add(p.composer?.attachments, "composer.attachments");
   add(p.header, "header");
   add(p.sidePanel, "sidePanel");
   add(p.aboveThread, "aboveThread");
   add(p.empty, "empty");
   add(p.waiting, "waiting");
+  add(p.wrap, "wrap");
+  add(p.onTurnStart, "onTurnStart");
+  add(p.onTurnDone, "onTurnDone");
   return out;
 }
 
@@ -187,19 +241,27 @@ export function resolvePlugins(list: readonly PilotoPlugin[] = []): ResolvedPlug
     className: "",
     toolRenders: {},
     customRenders: {},
+    blockRenders: {},
     attachments: {},
     header: [],
     sidePanel: [],
     aboveThread: [],
     composerActions: [],
     composerAbove: [],
+    composerActionsEnd: [],
+    composerBelow: [],
+    messageBefore: [],
+    wraps: [],
+    turnStart: [],
+    turnDone: [],
+    ghostykitStyled: new Set(),
     messageUser: [],
     messageAssistant: [],
     events: {},
     state: {},
     warnings: [],
   };
-  const transforms: ((md: string) => string)[] = [];
+  const transforms: NonNullable<PluginMarkdown["transform"]>[] = [];
   const linkHandlers: NonNullable<MarkdownOptions["onLinkClick"]>[] = [];
   const formatters: ((t: string) => string)[] = [];
   const names = new Set<string>();
@@ -221,6 +283,14 @@ export function resolvePlugins(list: readonly PilotoPlugin[] = []): ResolvedPlug
     if (p.message?.formatUserText) formatters.push(p.message.formatUserText);
     for (const [k, v] of Object.entries(p.tools?.render ?? {})) first(r.toolRenders, k, p.name, v, "tools.render");
     for (const [k, v] of Object.entries(p.message?.custom ?? {})) first(r.customRenders, k, p.name, v, "message.custom");
+    for (const [k, v] of Object.entries(p.markdown?.blocks ?? {})) first(r.blockRenders, k, p.name, v, "markdown.blocks");
+    if (p.styles === "ghostykit") r.ghostykitStyled.add(p.name);
+    if (p.composer?.actionsEnd) r.composerActionsEnd.push(own(p.composer.actionsEnd));
+    if (p.composer?.below) r.composerBelow.push(own(p.composer.below));
+    if (p.message?.assistantBefore) r.messageBefore.push(own(p.message.assistantBefore));
+    if (p.wrap) r.wraps.push(own(p.wrap));
+    if (p.onTurnStart) r.turnStart.push(own(p.onTurnStart));
+    if (p.onTurnDone) r.turnDone.push(own(p.onTurnDone));
     for (const key of ["upload", "transcribe", "voiceNoteText"] as const) {
       const v = p.composer?.attachments?.[key];
       if (!v) continue;
@@ -245,7 +315,7 @@ export function resolvePlugins(list: readonly PilotoPlugin[] = []): ResolvedPlug
       for (const k of real) if (!declared.has(k)) r.warnings.push(`«${p.name}» atiende «${k}» sin declararlo en requires.`);
     }
   }
-  if (transforms.length) r.markdown.transform = (md) => transforms.reduce((acc, f) => f(acc), md);
+  if (transforms.length) r.markdown.transform = (md, turn) => transforms.reduce((acc, f) => f(acc, turn), md);
   if (linkHandlers.length) r.markdown.onLinkClick = (href, ev) => linkHandlers.some((f) => f(href, ev));
   if (formatters.length) r.formatUserText = (t) => formatters.reduce((acc, f) => f(acc), t);
   return r;
