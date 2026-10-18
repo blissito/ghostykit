@@ -220,8 +220,8 @@ must be stable (the client uses them to join history pages).
   or repeating a `runId` all answer `RUN_STARTED {runId: "<the live run's id>"}`, not the request's
   id. That is the id the client sends in `forwardedProps.cancel`. With nothing live, `RUN_STARTED`
   carries the request's `runId`.
-- **A live run is part of the snapshot.** It includes what the live run has said so far; the events
-  that follow continue from there.
+- **A live run is part of the snapshot** up to its last closed message; what is still open is re-sent
+  right after it (see "Reconnecting in the middle of an answer" below).
 - **What a turn delivered** (files, artifacts: the `CUSTOM` events of §7 that the app draws) goes
   in `metadata.custom` of that assistant message, so it is still there after a reload. (`metadata`
   is AG-UI's open field on messages; a top-level extra field could be dropped by a validator.)
