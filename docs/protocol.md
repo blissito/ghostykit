@@ -281,7 +281,8 @@ A later snapshot keeps the loaded pages when it starts at a message the client a
   `409 run_active` (or starts a normal run if nothing is live). The client then **keeps the message**
   (`pilot.state.queued`, drawn faded under the thread with "Sends when this finishes"), reconnects
   (§5) to follow the live run, and sends it as a normal run when that run's `RUN_FINISHED` arrives
-  (several waiting messages go together). After three refusals it gives up and shows the error.
+  (several waiting messages go together). After three refusals it gives up and shows the error. **Stop**
+  empties the queue without sending it: the waiting text goes back to the message box.
   Steer carries text only: attachments wait for the run to end.
 - **HTTP errors** (before the stream starts; body `{"error": "<code>", "message": "<for people>"}`):
 

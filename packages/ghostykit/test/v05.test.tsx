@@ -378,3 +378,54 @@ describe("ghosty.replace, ghosty.page y costUsd", () => {
     expect(s.turns[1].usage).toMatchObject({ used: 120, input: 100, output: 20, cost: 0.0123 });
   });
 });
+
+describe("Detener con mensajes en espera", () => {
+  it("vacía la cola, no la manda y regresa el texto a la caja", async () => {
+    const live = hanging();
+    const { transport, inputs } = scripted(
+      async (input, emit, signal) => {
+        emit({ type: "RUN_STARTED", runId: input.runId });
+        await live.wait(signal);
+      },
+      () => {
+        throw new PilotHttpError("Ya hay un turno en curso.", 409, "run_active");
+      },
+      async (_input, emit, signal) => {
+        emit({ type: "RUN_STARTED", runId: "r-live" });
+        await live.wait(signal);
+      },
+    );
+    // jsdom no tiene scrollTo.
+    (Element.prototype as { scrollTo?: unknown }).scrollTo ??= () => {};
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    const root = createRoot(el);
+    const ref: { current: Pilot | null } = { current: null };
+    function App() {
+      const pilot = usePilot(transport, { steer: true });
+      ref.current = pilot;
+      return <Piloto transport={null} pilot={pilot} />;
+    }
+    await act(async () => root.render(<App />));
+    await act(async () => void ref.current!.send("hola"));
+    await act(async () => {
+      void ref.current!.send("y la purga");
+      await new Promise((r) => setTimeout(r, 10));
+    });
+    expect(ref.current!.state.queued.map((q) => q.text)).toEqual(["y la purga"]);
+    await act(async () => {
+      ref.current!.stop();
+      await new Promise((r) => setTimeout(r, 10));
+    });
+    live.release();
+    await act(async () => new Promise((r) => setTimeout(r, 10)));
+    const s = ref.current!.state;
+    expect(s.queued).toEqual([]);
+    expect(s.returnedDraft?.text).toBe("y la purga");
+    // Sólo salió el cancel: nadie volvió a mandar el mensaje.
+    expect(inputs.slice(3).map((i) => [i.messages.length, i.forwardedProps.cancel ? "cancel" : ""])).toEqual([[0, "cancel"]]);
+    expect(el.querySelector("textarea")!.value).toBe("y la purga");
+    await act(async () => root.unmount());
+    el.remove();
+  });
+});

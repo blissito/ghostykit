@@ -436,7 +436,13 @@ export function sendFailed(prev: PilotState, message: string): PilotState {
 
 /** Detener: el cliente cortó la conexión (el servidor corta el run). */
 export function stopTurn(prev: PilotState): PilotState {
-  return { ...prev, busy: false, step: null, turnStartedAt: 0, turns: closeOpenTools(prev.turns, "cancelled"), effects: [] };
+  // Quien detiene quiere que pare todo: lo que esperaba turno NO sale solo, regresa a la caja.
+  const text = prev.queued.map((q) => q.text).filter(Boolean).join("\n\n");
+  const attachments = prev.queued.flatMap((q) => q.attachments ?? []);
+  const returnedDraft = prev.queued.length
+    ? { text, ...(attachments.length ? { attachments } : {}), n: (prev.returnedDraft?.n ?? 0) + 1 }
+    : prev.returnedDraft;
+  return { ...prev, busy: false, step: null, queued: [], returnedDraft, turnStartedAt: 0, turns: closeOpenTools(prev.turns, "cancelled"), effects: [] };
 }
 
 /** Quita el último intercambio (las respuestas del final y el último mensaje del usuario). */

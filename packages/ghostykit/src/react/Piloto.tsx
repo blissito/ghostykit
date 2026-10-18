@@ -167,6 +167,16 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
     setDraftState((d) => ({ text: draftText, n: d.n + 1 }));
   }, [draftText, draftKey]);
 
+  // Al detener, lo que esperaba turno regresa a la caja, delante de lo que ya se estuviera escribiendo.
+  const returned = state.returnedDraft;
+  useEffect(() => {
+    if (!returned) return;
+    const typed = composerBox.current?.querySelector("textarea")?.value ?? "";
+    const text = [returned.text, typed].filter((x) => x.trim()).join("\n\n");
+    setDraftState((d) => ({ text, n: d.n + 1 }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [returned?.n]);
+
   const send = useCallback(
     (text: string, attachments: Attachment[] = []) => {
       const current = refsRef.current;

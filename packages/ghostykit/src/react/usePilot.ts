@@ -341,9 +341,7 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
     const input = baseInput();
     void t
       .run({ ...input, forwardedProps: { ...input.forwardedProps, cancel: run } }, () => {})
-      .catch(() => {})
-      // Lo que esperaba al run detenido sale ya que no hay run.
-      .then(() => flushRef.current());
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [commit, threadId]);
 

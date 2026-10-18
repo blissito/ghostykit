@@ -167,6 +167,8 @@ export interface PilotState {
   historyNext?: HistoryPage | null;
   /** Mensajes en espera de que termine el run vivo (steer rechazado). */
   queued: QueuedMessage[];
+  /** Lo que estaba en espera cuando la persona detuvo: regresa a la caja (`n` cambia en cada vez). */
+  returnedDraft?: { text: string; attachments?: Attachment[]; n: number } | null;
   /** El `TEXT_MESSAGE` abierto y dónde empieza en el texto del último turno: si el servidor lo
    *  re-emite (reconexión, §0.7b-4) con el mismo `messageId`, se reescribe en vez de duplicarse. */
   openText?: { id: string; start: number } | null;
