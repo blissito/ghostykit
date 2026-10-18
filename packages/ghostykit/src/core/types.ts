@@ -28,6 +28,8 @@ export interface ToolEntry {
   path?: string;
   /** Los argumentos, en corto («job: purge-notifications»). */
   detail?: string;
+  /** `detail` lo puso el servidor (`ghosty.tool`): ya no se deriva de los argumentos. */
+  detailFromServer?: boolean;
   /** Los argumentos en JSON tal como llegaron (TOOL_CALL_ARGS). */
   args?: string;
 }

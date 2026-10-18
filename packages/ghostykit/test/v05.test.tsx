@@ -585,3 +585,32 @@ describe("ghosty.stalled, metadata.truncated, attachments_failed, steer:true y r
     live.release();
   });
 });
+
+describe("ghosty.tool detail", () => {
+  it("gana sobre el detalle de los argumentos, aunque TOOL_CALL_END llegue después, y sobrevive al snapshot", () => {
+    let s = run(beginSend(createPilotState(), "hola", [], 1), [
+      { type: "RUN_STARTED", runId: "r" },
+      { type: "TOOL_CALL_START", toolCallId: "c1", toolCallName: "Read" },
+      { type: "CUSTOM", name: "ghosty.tool", value: { toolCallId: "c1", title: "Leyendo notas.md", detail: "notas.md" } },
+      { type: "TOOL_CALL_ARGS", toolCallId: "c1", delta: "{\"file_path\":\"/data/work/notas.md\"}" },
+      { type: "TOOL_CALL_END", toolCallId: "c1" },
+    ]);
+    expect(s.turns[1].tools?.[0].detail).toBe("notas.md");
+    s = run(s, [
+      {
+        type: "MESSAGES_SNAPSHOT",
+        messages: [
+          { id: "u", role: "user", content: "hola" },
+          { id: "a", role: "assistant", content: "", toolCalls: [{ id: "c1", type: "function", function: { name: "Read", arguments: "{\"file_path\":\"/data/work/notas.md\"}" } }] },
+        ],
+      },
+    ]);
+    expect(s.turns[1].tools?.[0]).toMatchObject({ label: "Leyendo notas.md", detail: "notas.md" });
+    const plain = run(createPilotState(), [
+      { type: "TOOL_CALL_START", toolCallId: "c2", toolCallName: "Read" },
+      { type: "TOOL_CALL_ARGS", toolCallId: "c2", delta: "{\"file_path\":\"/x.md\"}" },
+      { type: "TOOL_CALL_END", toolCallId: "c2" },
+    ]);
+    expect(plain.turns[0].tools?.[0].detail).toBe("file_path: /x.md");
+  });
+});

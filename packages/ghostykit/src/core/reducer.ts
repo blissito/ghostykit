@@ -131,7 +131,7 @@ function toolLabel(t: Turn, v: unknown): void {
   if (str(x.title)) patch.label = str(x.title);
   if (str(x.kind)) patch.kind = str(x.kind);
   if (str(x.path)) patch.path = str(x.path);
-  if (str(x.detail)) patch.detail = str(x.detail);
+  if (str(x.detail)) Object.assign(patch, { detail: str(x.detail), detailFromServer: true });
   t.tools = (t.tools ?? []).map((y) => (y.id === x.toolCallId ? { ...y, ...patch } : y));
 }
 
@@ -213,7 +213,8 @@ function applySnapshot(s: PilotState, messages: Message[]): PilotState {
     const tools = t.tools?.map((x) => {
       const prev = o?.role === t.role ? o.tools?.find((y) => y.id === x.id) : undefined;
       const status = x.status === "pending" && (prev?.status ?? (live ? "in_progress" : undefined));
-      return { ...prev, ...x, ...(status ? { status } : {}) };
+      const keepDetail = prev?.detailFromServer && !x.detailFromServer ? { detail: prev.detail, detailFromServer: true } : {};
+      return { ...prev, ...x, ...(status ? { status } : {}), ...keepDetail };
     });
     const base = tools ? { ...t, tools } : t;
     if (!o || o.role !== t.role) return base;
@@ -282,6 +283,8 @@ export function reduceAgUiEvent(prev: PilotState, e: Ev, now: number = Date.now(
     }
     case "TOOL_CALL_END": {
       const known = s.turns[s.turns.length - 1]?.tools?.find((x) => x.id === e.toolCallId);
+      // El `detail` de `ghosty.tool` gana sobre el que se deriva de los argumentos.
+      if (known?.detailFromServer) return s;
       return upsertTool(s, e.toolCallId, { detail: argsDetail(known?.args) });
     }
     case "TOOL_CALL_RESULT": {
@@ -328,7 +331,7 @@ export function reduceAgUiEvent(prev: PilotState, e: Ev, now: number = Date.now(
         if (str(v.title)) patch.label = str(v.title);
         if (str(v.kind)) patch.kind = str(v.kind);
         if (str(v.path)) patch.path = str(v.path);
-        if (str(v.detail)) patch.detail = str(v.detail);
+        if (str(v.detail)) Object.assign(patch, { detail: str(v.detail), detailFromServer: true });
         return upsertTool(s, v.toolCallId, patch);
       }
       if (e.name === "ghosty.replace") {
