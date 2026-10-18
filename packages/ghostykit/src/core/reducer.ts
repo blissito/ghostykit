@@ -376,6 +376,9 @@ function finish(s0: PilotState, e: Ev, now: number, failed = false): PilotState 
       )
     : null;
   const usage = tokens || costUsd !== undefined ? { ...(tokens ?? { used: 0, size: 0, cost: 0 }), ...(costUsd !== undefined ? { cost: costUsd } : {}) } : null;
+  // Un run cortado por el servidor (no por la persona) se puede continuar.
+  const cut = (e.metadata as { interrupted?: { runId?: unknown; reason?: unknown } } | undefined)?.interrupted;
+  s = { ...s, cutRun: cut && typeof cut.runId === "string" ? { runId: cut.runId, ...(typeof cut.reason === "string" && cut.reason ? { reason: cut.reason } : {}) } : null };
   const t0 = s.turnStartedAt;
   const seconds = t0 ? Math.max(1, Math.round((now - t0) / 1000)) : undefined;
   const turns = [...s.turns];
@@ -400,7 +403,7 @@ function finish(s0: PilotState, e: Ev, now: number, failed = false): PilotState 
 /** El usuario manda un mensaje (o contesta una tarjeta: `text` vacío, sin burbuja). */
 export function beginSend(prev: PilotState, text: string, attachments: Attachment[] = [], now: number = Date.now()): PilotState {
   const turns = text || attachments.length ? [...prev.turns, { role: "user" as const, text, ...(attachments.length ? { attachments } : {}) }] : prev.turns;
-  return { ...prev, turns, busy: true, error: null, notice: null, turnStartedAt: now, effects: [{ type: "turn-start" }] };
+  return { ...prev, turns, busy: true, error: null, notice: null, cutRun: null, turnStartedAt: now, effects: [{ type: "turn-start" }] };
 }
 
 /**

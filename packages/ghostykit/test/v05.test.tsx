@@ -469,3 +469,58 @@ describe("historial con la forma de gs (format=agui)", () => {
     expect(s.olderCount).toBe(1);
   });
 });
+
+describe("run cortado por el servidor (metadata.interrupted) y «Continuar»", () => {
+  const cutOpen: Script = (input, emit) => {
+    emit({ type: "RUN_STARTED", runId: input.runId });
+    emit({ type: "MESSAGES_SNAPSHOT", messages: [{ id: "u1", role: "user", content: "hazme el video" }, { id: "a1", role: "assistant", content: "Empiezo…" }] });
+    emit({ type: "RUN_FINISHED", runId: input.runId, outcome: { type: "success" }, metadata: { interrupted: { runId: "r-cut", reason: "Se reinició el servidor a media respuesta." } } });
+  };
+
+  it("el reductor guarda el run cortado al reconectar y lo suelta con un fin normal o un mensaje nuevo", () => {
+    let s = run(createPilotState(), [
+      { type: "RUN_STARTED", runId: "o" },
+      { type: "RUN_FINISHED", runId: "o", outcome: { type: "success" }, metadata: { interrupted: { runId: "r-cut", reason: "Se cayó la caja." } } },
+    ]);
+    expect(s.cutRun).toEqual({ runId: "r-cut", reason: "Se cayó la caja." });
+    expect(beginSend(s, "otra cosa", [], 1).cutRun).toBeNull();
+    s = run(s, [{ type: "RUN_STARTED", runId: "c" }, { type: "RUN_FINISHED", runId: "c", outcome: { type: "success" } }]);
+    expect(s.cutRun).toBeNull();
+  });
+
+  it("«Continuar» manda messages:[] con forwardedProps.continueRun y la franja se va al terminar", async () => {
+    const { transport, inputs } = scripted(cutOpen, (input, emit) => {
+      emit({ type: "RUN_STARTED", runId: input.runId });
+      emit({ type: "TEXT_MESSAGE_CONTENT", messageId: "a2", delta: " y termino." });
+      emit({ type: "RUN_FINISHED", runId: input.runId, outcome: { type: "success" } });
+    });
+    const { pilot } = await mount(transport, { threadId: "22222222-2222-4222-8222-222222222222" });
+    expect(pilot().state.cutRun?.runId).toBe("r-cut");
+    await act(async () => void (await pilot().continueRun()));
+    expect(inputs[1]).toMatchObject({ messages: [], forwardedProps: { continueRun: "r-cut" } });
+    expect(pilot().state.cutRun).toBeNull();
+    expect(pilot().state.turns.map((t) => t.role)).toEqual(["user", "assistant"]);
+  });
+
+  it("409 nothing_to_continue: la franja desaparece sin error", async () => {
+    const { transport } = scripted(cutOpen, () => {
+      throw new PilotHttpError("Nada que continuar.", 409, "nothing_to_continue");
+    });
+    const { pilot } = await mount(transport, { threadId: "33333333-3333-4333-8333-333333333333" });
+    await act(async () => void (await pilot().continueRun()));
+    const s = pilot().state;
+    expect(s.cutRun).toBeNull();
+    expect(s.error).toBeNull();
+    expect(s.busy).toBe(false);
+  });
+
+  it("Piloto pinta la franja con la razón y el botón «Continuar»", () => {
+    const state: PilotState = { ...createPilotState([{ role: "user", text: "hola" }]), cutRun: { runId: "r", reason: "Se reinició el servidor." } };
+    const pilot = { state, threadId: "t", canSteer: false, loadingOlder: false } as unknown as Pilot;
+    const html = renderToString(<Piloto transport={null} pilot={pilot} />);
+    expect(html).toContain("Se reinició el servidor.");
+    expect(html).toContain(">Continuar</button>");
+    const bare = renderToString(<Piloto transport={null} pilot={{ ...pilot, state: { ...state, cutRun: { runId: "r" } } }} />);
+    expect(bare).toContain("La respuesta se cortó antes de terminar.");
+  });
+});

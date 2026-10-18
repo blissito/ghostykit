@@ -165,6 +165,11 @@ export interface PilotState {
   olderCount: number;
   /** El `ghosty.history` que acompaña al snapshot que viene. */
   historyNext?: HistoryPage | null;
+  /**
+   * El último run se cortó del lado del servidor (deploy, caja caída): `RUN_FINISHED.metadata.interrupted`.
+   * `reason` ya viene en palabras de persona. Se ofrece «Continuar».
+   */
+  cutRun?: { runId: string; reason?: string } | null;
   /** Mensajes en espera de que termine el run vivo (steer rechazado). */
   queued: QueuedMessage[];
   /** Lo que estaba en espera cuando la persona detuvo: regresa a la caja (`n` cambia en cada vez). */

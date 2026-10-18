@@ -104,6 +104,8 @@ export interface Pilot {
    * por fuera que algo cambió (p. ej. el bus `/me/events` avisa que un subagente terminó).
    */
   refresh: () => Promise<void>;
+  /** Continúa el run que el servidor cortó (`state.cutRun`): `forwardedProps.continueRun`. */
+  continueRun: () => Promise<void>;
 }
 
 /** A la tercera vez que el servidor rechaza un mensaje en espera, se deja de insistir. */
@@ -202,7 +204,7 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
       const steering = typeof input.forwardedProps?.steer === "string";
       const userMsg = input.messages[0] as { content?: unknown } | undefined;
       // El run que se puede detener: el que este cliente arrancó (un steer se suma al que ya corre).
-      if (!steering && (input.messages.length || input.resume?.length)) liveRun.current = input.runId;
+      if (!steering && (input.messages.length || input.resume?.length || input.forwardedProps?.continueRun)) liveRun.current = input.runId;
       optsRef.current.onSend?.(input);
       let ended = false;
       try {
@@ -222,6 +224,12 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
       } catch (err) {
         if (c.signal.aborted) return;
         const code = err instanceof PilotHttpError ? err.code : undefined;
+        // Ya no había nada que continuar (otro cliente lo hizo, o el hilo siguió): la franja se va sin error.
+        if (code === "nothing_to_continue") {
+          liveRun.current = null;
+          commit({ ...ref.current, busy: false, turnStartedAt: 0, cutRun: null, effects: [] });
+          return;
+        }
         // Ya hay un run vivo, o aprobaciones sin contestar: el mensaje queda en espera (sale solo al
         // terminar ese run, gs-agui 1 §0.7b-6) y se abre el hilo para seguir el run o ver las tarjetas.
         if ((code === "run_active" || code === "interrupt_pending") && !reopening) {
@@ -422,10 +430,17 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
     [commit, runNow],
   );
 
+  const continueRun = useCallback(async () => {
+    const cut = ref.current.cutRun;
+    if (!cut || ref.current.busy || !transportRef.current) return;
+    commit(beginSend(ref.current, "", []));
+    await runNow({ messages: [], forwardedProps: { continueRun: cut.runId } });
+  }, [commit, runNow]);
+
   const refresh = useCallback(() => runNow({ messages: [] }, true), [runNow]);
 
   const canSteer = Boolean(transport) && (opts.steer ?? ((state.agentState.caps as { steer?: unknown } | undefined)?.steer === true));
   const subagents = useMemo(() => subagentsOf(state.agentState), [state.agentState]);
 
-  return { state, threadId, send, stop, retry, respondPermission, recordDecision, expirePermission, canSteer, loadOlder, loadingOlder, subagents, stopSubagent, refresh };
+  return { state, threadId, send, stop, retry, respondPermission, recordDecision, expirePermission, canSteer, loadOlder, loadingOlder, subagents, stopSubagent, refresh, continueRun };
 }

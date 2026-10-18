@@ -47,7 +47,7 @@ Body: `RunAgentInput`.
 | `messages` | **Only what is new in this request**: the user's message, or nothing (see §5) | Append to the stored thread. Never trust the client for older history. |
 | `context` | What the user sees right now, one entry per key; `value` is a string (JSON when structured) | Give it to the agent for this run only. |
 | `resume` | Answers to pending approvals (see §4) | Continue the paused run. |
-| `forwardedProps` | Empty, except `{"cancel": "<runId>"}` to stop a run, `{"steer": "<runId>"}` to add the message to a live run (§6), or `{"stopSubagent": "<taskId>"}` to stop one subagent (§3). The app may add its own keys (`forwardedProps` option), e.g. Ghosty Studio's `{"permissions": "ask" \| "auto"}` | Stop that run / inject the message / stop that subagent. Ignore keys you don't know. |
+| `forwardedProps` | Empty, except `{"cancel": "<runId>"}` to stop a run, `{"steer": "<runId>"}` to add the message to a live run (§6), `{"stopSubagent": "<taskId>"}` to stop one subagent (§3), or `{"continueRun": "<runId>"}` to continue a run the server cut (§6). The app may add its own keys (`forwardedProps` option), e.g. Ghosty Studio's `{"permissions": "ask" \| "auto"}` | Stop that run / inject the message / stop that subagent. Ignore keys you don't know. |
 | `tools`, `state` | Empty | Ignore unless your agent uses them. |
 
 Attachments go in the user message as AG-UI content parts:
@@ -296,6 +296,19 @@ Example (Ghosty Studio): `GET /conversations/:sid/messages?format=agui&before=<s
   (several waiting messages go together). After three refusals it gives up and shows the error. **Stop**
   empties the queue without sending it: the waiting text goes back to the message box.
   Steer carries text only: attachments wait for the run to end.
+- **Continuing a run the server cut (optional).** When a run dies on the server's side (a deploy, a
+  box that went down, a silence), the `RUN_FINISHED` that closes it, also the one sent when
+  reconnecting (§5), says so in `metadata`:
+  ```json
+  { "type": "RUN_FINISHED", "runId": "run_8a90", "outcome": { "type": "success" },
+    "metadata": { "interrupted": { "runId": "run_8a77", "reason": "The server restarted mid-answer." } } }
+  ```
+  `reason` is for people. The chat shows it in a strip above the message box with a **Continue**
+  button (the same label on iOS and Android). Continue posts `messages: []` with
+  `forwardedProps: {"continueRun": "run_8a77"}`; the backend resumes the work as a normal run
+  (Ghosty Studio stores only "Continue where you left off." in the thread). With nothing to continue
+  (someone already did, or the thread moved on) it answers `409 nothing_to_continue` and the strip
+  goes away without an error. Sending a new message also dismisses the strip.
 - **HTTP errors** (before the stream starts; body `{"error": "<code>", "message": "<for people>"}`):
 
 | Status | When | Client does |
@@ -304,6 +317,7 @@ Example (Ghosty Studio): `GET /conversations/:sid/messages?format=agui&before=<s
 | `401` / `403` | Not signed in / not allowed | Shows `message`; the app may ask to sign in. |
 | `409` `{"error":"run_active"}` | A run is already going on this thread | Keeps the message, reconnects (§5) and sends it when the run ends. |
 | `409` `{"error":"interrupt_pending"}` | There are unanswered approvals | Keeps the message and reconnects (§5), which shows the cards; it goes out once they are answered and the run ends. |
+| `409` `{"error":"nothing_to_continue"}` | `continueRun` for a run that can't be continued | Hides the Continue strip. |
 | `400` `{"error":"resume_incomplete"}` | A `resume` didn't answer every open interrupt | Never sent by this client: one `resume` always answers them all (§4). |
 | `402` `{"error":"quota_exceeded"}` | The plan's limit | Shows `message`. |
 | `429` + `Retry-After` | Rate limit / no capacity | Shows `message`, then lets the user retry. |
@@ -341,7 +355,7 @@ Unknown names (yours) are kept in the turn too.
 4. An empty `messages` with no `resume` answers `MESSAGES_SNAPSHOT` plus the live run, the pending
    interrupt, or success.
 5. A closed connection never stops a run; `forwardedProps.cancel` does. `409`/`429`/`503` as in §6.
-6. Optional: `STATE_SNAPSHOT`/`STATE_DELTA` with `caps` and `subagents`, steer with `forwardedProps.steer`, `forwardedProps.stopSubagent`,
+6. Optional: `STATE_SNAPSHOT`/`STATE_DELTA` with `caps` and `subagents`, steer with `forwardedProps.steer`, `forwardedProps.stopSubagent`, `metadata.interrupted` + `forwardedProps.continueRun`,
    `ghosty.history` for long threads, and deliveries in `metadata.custom`.
 
 Reference: an agent written with LangGraph and served through its official AG-UI adapter

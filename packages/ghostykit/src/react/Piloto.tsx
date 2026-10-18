@@ -490,6 +490,19 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
                   <ArrowDown className="h-4 w-4" />
                 </button>
               )}
+              {state.cutRun && !busy && (
+                // El servidor cortó la respuesta (deploy, caja caída): la persona decide si sigue.
+                <div data-cut-run role="status" className="mb-2 flex items-center gap-3 rounded-2xl border border-border-primary bg-background-secondary px-3 py-2 text-sm text-text-secondary">
+                  <span className="min-w-0 flex-1">{state.cutRun.reason ?? t.runCut}</span>
+                  <button
+                    type="button"
+                    onClick={() => void pilot.continueRun()}
+                    className="shrink-0 rounded-full bg-brand-500 px-3 py-1 text-sm font-medium text-white transition hover:bg-brand-600"
+                  >
+                    {t.continueRun}
+                  </button>
+                </div>
+              )}
               {aboveComposer}
               {composer}
             </div>
