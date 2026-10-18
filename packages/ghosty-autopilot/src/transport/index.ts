@@ -1,164 +1,130 @@
-// ghosty-autopilot/transport — por dónde viaja la conversación. La interfaz es chica a propósito: un stream
-// de eventos con nombre, mandar, cancelar y (opcional) modelo y permisos. `createSseTransport` habla
-// el contrato de Ghosty Studio (`${base}/events|messages|cancel|model|permission`).
-import type { SendInput, SendResult } from "../core/types";
-import { PilotHttpError, type PilotListener, type PilotTransport } from "./types";
+// ghosty-autopilot/transport — el ÚNICO transporte: AG-UI sobre HTTP. Un `POST <url>` con
+// `RunAgentInput` que contesta SSE de eventos AG-UI (ver docs/protocol.md). Nada más: cancelar es
+// abortar la petición; reconectar es otro POST sin mensaje nuevo (el servidor manda MESSAGES_SNAPSHOT).
+//
+// No se usa `HttpAgent` de `@ag-ui/client` a propósito: arrastra rxjs y su propio estado de mensajes, y
+// aquí el estado vive en el reductor de Piloto. Los TIPOS sí son los de `@ag-ui/core`.
+import type { BaseEvent, RunAgentInput } from "@ag-ui/core";
 
-export * from "./types";
-export { createPostStreamTransport, readSse, type PostStreamTransportOptions, type SseMessage } from "./postStream";
-
-/** Los eventos con nombre del contrato. Un evento SSE sin `addEventListener` no se despacha nunca. */
-export const SSE_EVENTS = [
-  "started", "status", "caps", "models", "chunk", "thought", "tool", "artifact", "usage", "title",
-  "done", "error", "warning", "reemplazo", "permission", "permission-resolved", "closed",
-  "page-plan", "section-building", "section-update", "section", "page-ready", "page-error",
-  "page-planning", "page-drop", "review", "page-version", "page-edit",
-  // Los de un servidor de turnos durables (EasyBits): re-enganche, sin turno, cortado, sin lugar.
-  "snapshot", "idle", "interrupted", "capacity",
-] as const;
-
-/** Los que cuentan como señal de vida de la conexión (los mismos que en `useAcpStream`). */
-const LIFE_EVENTS = new Set([
-  "started", "status", "chunk", "thought", "tool", "artifact", "usage", "done", "error", "warning",
-  "reemplazo", "permission", "page-plan", "section-building", "section-update", "section",
-  "page-ready", "page-error", "page-planning", "page-drop", "review", "page-version", "page-edit",
-  "snapshot", "idle", "interrupted", "capacity",
-]);
-
-/**
- * Tope de silencio del cliente, la red de seguridad: pasado esto SIN NINGÚN evento —ni el `status`
- * que el servidor manda cada 25 s con turno vivo— la conexión está muerta aunque el navegador no lo
- * note. No se da el turno por perdido: se reconecta y el servidor dice la verdad. ≥ el silencio
- * máximo del servidor (10 min) para no adelantarse nunca a él si no manda latido.
- */
-export const SILENCE_MAX_MS = 11 * 60_000;
-/** Con latido anunciado, basta con perder unos cuantos para saber que la conexión murió. */
-export const MISSED_BEATS = 4;
-/** Piso del tope con latido: un latido muy corto no debe reconectar a lo loco. */
-export const MIN_SILENCE_MS = 90_000;
-
-export interface SseTransportOptions {
-  /** Para mandar cabeceras propias (auth) en los POST. */
-  fetch?: typeof fetch;
-  /** Cookies en un stream de otro origen (widget embebido). */
-  withCredentials?: boolean;
-  /** Para pruebas o entornos sin `EventSource` global. */
-  EventSource?: typeof EventSource;
-  /** Eventos extra a escuchar (además de `SSE_EVENTS`). */
-  events?: string[];
-  /** Cada cuánto se revisa el silencio. */
-  checkEveryMs?: number;
-  /** Reloj inyectable (pruebas). */
-  now?: () => number;
+export interface PilotTransport {
+  /**
+   * Corre un run: manda `input`, entrega cada evento AG-UI a `onEvent` en orden y se resuelve cuando el
+   * servidor cierra el stream. Rechaza con `PilotHttpError` si el servidor dice que no antes de empezar.
+   */
+  run(input: RunAgentInput, onEvent: (event: BaseEvent) => void, signal?: AbortSignal): Promise<void>;
 }
 
-function parse(raw: unknown): unknown {
-  if (typeof raw !== "string" || !raw) return null;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
+/** El servidor rechazó el run antes de empezar (§6 de docs/protocol.md). */
+export class PilotHttpError extends Error {
+  status: number;
+  /** El `error` del cuerpo: `run_active`, `interrupt_pending`, `bad_request`… */
+  code?: string;
+  /** Segundos de `Retry-After` (429/503). */
+  retryAfter?: number;
+  constructor(message: string, status: number, code?: string, retryAfter?: number) {
+    super(message);
+    this.name = "PilotHttpError";
+    this.status = status;
+    this.code = code;
+    this.retryAfter = retryAfter;
   }
 }
 
-/** El transporte SSE de Ghosty: `GET ${base}/events` (stream) y POST a `messages|cancel|model|permission`. */
-export function createSseTransport(base: string, opts: SseTransportOptions = {}): PilotTransport {
-  const doFetch = (...args: Parameters<typeof fetch>) => (opts.fetch ?? fetch)(...args);
-  const now = opts.now ?? Date.now;
-  const root = base.replace(/\/+$/, "");
-  /** Cuándo llegó el último evento con vida; lo comparten el stream y `send`. */
-  let lastEventAt = now();
+export interface AgUiTransportOptions {
+  /** El endpoint del agente: `POST <url>`. */
+  url: string;
+  /** Cabeceras propias (auth por token). */
+  headers?: Record<string, string>;
+  /** Default `same-origin`: la cookie de sesión viaja sola. */
+  credentials?: RequestCredentials;
+  fetch?: typeof fetch;
+  /** Reintentos de un 503 (deploy) con el MISMO run. Default 6. */
+  retries?: number;
+  /** Espera inyectable (pruebas). */
+  sleep?: (ms: number) => Promise<void>;
+}
 
-  const post = (path: string, body?: unknown) =>
-    doFetch(`${root}/${path}`, {
-      method: "POST",
-      headers: body === undefined ? undefined : { "content-type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-      credentials: opts.withCredentials ? "include" : undefined,
-    });
+/** Un evento SSE ya separado: nombre + data crudo. */
+export interface SseMessage {
+  event: string;
+  data: string;
+}
 
-  return {
-    subscribe(listener, sub = {}) {
-      const ES = opts.EventSource ?? (globalThis as { EventSource?: typeof EventSource }).EventSource;
-      if (!ES) throw new Error("ghosty-autopilot: no hay EventSource en este entorno (pasa `EventSource` en las opciones)");
-      let es: EventSource | null = null;
-      let heartbeatMs: number | null = null;
-      let closed = false;
+/**
+ * Lee un stream SSE (`text/event-stream`) de un `fetch`. Los comentarios (`: ping`) se ignoran; un
+ * evento puede llegar partido en varios pedazos de red.
+ */
+export async function readSse(body: ReadableStream<Uint8Array>, onMessage: (m: SseMessage) => void): Promise<void> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let event = "message";
+  let data: string[] = [];
+  const flush = () => {
+    if (data.length) onMessage({ event, data: data.join("\n") });
+    event = "message";
+    data = [];
+  };
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
 
-      const open = () => {
-        const source = new ES(`${root}/events`, { withCredentials: Boolean(opts.withCredentials) });
-        es = source;
-        const names = new Set<string>([...SSE_EVENTS, ...(opts.events ?? [])]);
-        for (const name of names) {
-          source.addEventListener(name, (e) => {
-            if (es !== source) return; // una conexión vieja que se reemplazó
-            if (LIFE_EVENTS.has(name)) lastEventAt = now();
-            const raw = (e as MessageEvent).data;
-            // El `error` NATIVO del EventSource (se cayó la red) no trae data: el navegador
-            // reintenta solo y el servidor contesta qué pasó. Sólo el `error` del servidor se pinta.
-            if (name === "error" && (raw === undefined || raw === "")) return;
-            const data = parse(raw);
-            if (name === "started") {
-              const d = data as { latidoMs?: unknown } | null;
-              heartbeatMs = typeof d?.latidoMs === "number" && d.latidoMs > 0 ? d.latidoMs : null;
-            }
-            listener(name, data);
-            if (name === "closed") source.close();
-          });
-        }
-      };
-      open();
-
-      // La red de seguridad: un turno en vuelo sin NINGÚN evento en mucho rato. No se declara muerto
-      // aquí: se reabre el stream y el servidor contesta (sigue → `status`; terminó → `done`; se
-      // cortó → `done{interrumpido}`).
-      const timer = setInterval(() => {
-        if (closed || !sub.isBusy?.()) return;
-        const cap = heartbeatMs ? Math.max(heartbeatMs * MISSED_BEATS, MIN_SILENCE_MS) : SILENCE_MAX_MS;
-        if (now() - lastEventAt < cap) return;
-        lastEventAt = now();
-        es?.close();
-        open();
-      }, opts.checkEveryMs ?? 15_000);
-
-      return () => {
-        closed = true;
-        clearInterval(timer);
-        es?.close();
-        es = null;
-      };
-    },
-
-    async send(input) {
-      lastEventAt = now();
-      const res = await post("messages", {
-        content: input.text,
-        images: input.attachments,
-        // Lo que hace que el hilo se BAUTICE al cerrar este turno.
-        primerTurno: input.firstTurn,
-        ...(input.resume ? { retomar: true } : {}),
-        ...(input.context !== undefined ? { context: input.context } : {}),
-      });
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        throw new PilotHttpError(text || `Error ${res.status}`, res.status, Boolean(res.headers.get("X-Needs-Login")));
+    buffer += decoder.decode(value, { stream: true });
+    let nl: number;
+    while ((nl = buffer.search(/\r\n|\r|\n/)) >= 0) {
+      const line = buffer.slice(0, nl);
+      buffer = buffer.slice(nl + (buffer[nl] === "\r" && buffer[nl + 1] === "\n" ? 2 : 1));
+      if (line === "") flush();
+      else if (line.startsWith(":")) continue;
+      else {
+        const i = line.indexOf(":");
+        const field = i < 0 ? line : line.slice(0, i);
+        const val = i < 0 ? "" : line.slice(i + 1).replace(/^ /, "");
+        if (field === "event") event = val;
+        else if (field === "data") data.push(val);
       }
-      const r = (await res.json().catch(() => ({}))) as { inyectado?: boolean; estado?: string; turnId?: string };
-      return { injected: r.inyectado, state: r.estado, turnId: r.turnId };
-    },
+    }
+  }
+  flush();
+}
 
-    async cancel() {
-      await post("cancel").catch(() => {});
-    },
-
-    async setModel(value) {
-      await post("model", { value });
-    },
-
-    async respondPermission(id, optionId) {
-      const res = await post("permission", { id, optionId });
-      const r = (await res.json().catch(() => ({}))) as { resuelto?: boolean; resolved?: boolean };
-      return { resolved: Boolean(r.resuelto ?? r.resolved) };
+/** El transporte AG-UI sobre HTTP (SSE). */
+export function createAgUiTransport(opts: AgUiTransportOptions): PilotTransport {
+  const doFetch = (...a: Parameters<typeof fetch>) => (opts.fetch ?? fetch)(...a);
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const retries = opts.retries ?? 6;
+  return {
+    async run(input, onEvent, signal) {
+      const body = JSON.stringify(input);
+      for (let attempt = 0; ; attempt++) {
+        const res = await doFetch(opts.url, {
+          method: "POST",
+          credentials: opts.credentials ?? "same-origin",
+          headers: { "content-type": "application/json", accept: "text/event-stream", ...opts.headers },
+          body,
+          signal,
+        });
+        const retryAfter = Number(res.headers.get("Retry-After")) || undefined;
+        // Deploy en curso: el mismo run (mismo runId) en un momento.
+        if (res.status === 503 && attempt < retries) {
+          await sleep((retryAfter ?? 3) * 1000);
+          continue;
+        }
+        if (!res.ok) {
+          const json = (await res.json().catch(() => null)) as { error?: string; message?: string } | null;
+          throw new PilotHttpError(json?.message ?? json?.error ?? `Error ${res.status}`, res.status, json?.error, retryAfter);
+        }
+        if (!res.body) return;
+        await readSse(res.body, ({ data }) => {
+          if (!data) return;
+          try {
+            onEvent(JSON.parse(data) as BaseEvent);
+          } catch {
+            // Un evento que no es JSON no es AG-UI: se ignora.
+          }
+        });
+        return;
+      }
     },
   };
 }

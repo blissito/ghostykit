@@ -11,7 +11,7 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": false,
     "noEmit": true,
-    "types": []
+    "types": ["node"]
   },
   "include": ["src", "test"]
 }

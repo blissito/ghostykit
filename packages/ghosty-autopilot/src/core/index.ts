@@ -1,25 +1,19 @@
-// ghosty-autopilot/core — el estado del chat sin React: tipos, reductor puro y parsers.
+// ghosty-autopilot/core — el estado del chat sin React: tipos, reductor puro sobre eventos AG-UI y parsers.
 export * from "./types";
 export {
-  RESTART_NOTICE,
-  RESUME_TEXT,
-  appendAgentMessages,
-  applyHistory,
+  argsDetail,
   beginSend,
   createPilotState,
   dropLastExchange,
   expiryMs,
   lastUserTurn,
-  reconcileWith,
-  reducePilotEvent,
+  messagesToTurns,
+  reduceAgUiEvent,
   resolvePermission,
-  resumeMode,
-  sendAccepted,
   sendFailed,
-  sendRejectedBusy,
   stopTurn,
+  toPermission,
 } from "./reducer";
-export { reconcileTurns } from "./reconcile";
 export { isNarration, narrationToMarkdown, splitNarration } from "./narration";
 export { cleanReplyOption, extractReplyOptions, type ReplyOptions } from "./options";
 export {

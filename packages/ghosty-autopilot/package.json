@@ -1,7 +1,7 @@
 {
   "name": "ghosty-autopilot",
-  "version": "0.4.0",
-  "description": "Ghosty Autopilot \u2014 the autopilot chat for your app, from Ghosty Studio: streaming, agent steps, attachments, voice, reconnection and human approval cards. Pure event reducer + SSE transport + React components.",
+  "version": "0.5.0",
+  "description": "Ghosty Autopilot \u2014 the autopilot chat for your React app, on AG-UI: works with LangGraph, Mastra, CrewAI or any AG-UI agent. Streaming text, agent steps, human approval cards (interrupt/resume), attachments and voice.",
   "type": "module",
   "main": "./dist/core/index.js",
   "types": "./dist/core/index.d.ts",
@@ -59,6 +59,7 @@
   "devDependencies": {
     "@ghostystudio/pointer": "^0.4.0",
     "@tailwindcss/cli": "^4.1.0",
+    "@types/node": "^22.20.5",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "esbuild": "^0.25.0",
@@ -74,16 +75,18 @@
     "vitest": "^3.2.0"
   },
   "keywords": [
-    "ai",
-    "agent",
-    "autopilot",
-    "copilot",
-    "chat",
-    "react",
-    "sse",
     "acp",
+    "ag-ui",
+    "agent",
+    "ai",
+    "autopilot",
+    "chat",
+    "copilot",
+    "ghosty",
     "human-in-the-loop",
-    "ghosty"
+    "langgraph",
+    "react",
+    "sse"
   ],
   "license": "MIT",
   "repository": {
@@ -91,5 +94,8 @@
     "url": "git+https://github.com/blissito/ghosty-autopilot.git",
     "directory": "packages/ghosty-autopilot"
   },
-  "homepage": "https://github.com/blissito/ghosty-autopilot#readme"
+  "homepage": "https://github.com/blissito/ghosty-autopilot#readme",
+  "dependencies": {
+    "@ag-ui/core": "^1.0.3"
+  }
 }
