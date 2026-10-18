@@ -1,5 +1,11 @@
 // La interfaz del transporte y su error, aparte para que ambos transportes la compartan.
-import type { SendInput, SendResult, Turn } from "../core/types";
+import type { PermissionRequest, SendInput, SendResult, Turn } from "../core/types";
+
+/** El hilo guardado y las tarjetas de permiso que siguen abiertas (EasyBits: `pending`). */
+export interface PilotHistory {
+  turns: Turn[];
+  permissions?: PermissionRequest[];
+}
 
 /** Un evento con nombre y su `data` ya parseado (`null` si no traía o no era JSON). */
 export type PilotListener = (name: string, data: unknown) => void;
@@ -21,7 +27,7 @@ export interface PilotTransport {
   /** Contesta un pedido de permiso. `resolved: false` = ya no estaba abierto (se agotó el plazo). */
   respondPermission?(id: string, optionId: string): Promise<{ resolved: boolean }>;
   /** El hilo guardado, para pintarlo al montar (si la app no pasa `initialTurns`). */
-  history?(): Promise<Turn[]>;
+  history?(): Promise<Turn[] | PilotHistory>;
   /**
    * ¿Se puede mandar un mensaje con un turno en vuelo (steer)? Default `true` (Ghosty). Con
    * `false` (el servidor contesta 409) el composer no deja mandar hasta que el turno cierre.

@@ -2,7 +2,7 @@
 // MISMO reductor: pasos sin id, `snapshot` al re-engancharse, `idle`, `interrupted`, `capacity`,
 // `error` final y tarjetas de permiso que viven más que el turno.
 import { describe, expect, it } from "vitest";
-import { beginSend, createPilotState, reducePilotEvent, resolvePermission, sendAccepted, sendRejectedBusy, type PilotState } from "../src/core";
+import { applyHistory, beginSend, createPilotState, reducePilotEvent, resolvePermission, sendAccepted, sendRejectedBusy, type PilotState } from "../src/core";
 
 type Ev = [name: string, data?: unknown];
 function replay(s: PilotState, events: Ev[], clock = { now: 1_000 }): PilotState {
@@ -168,5 +168,18 @@ describe("EasyBits: re-enganche (`GET ?attach=1`)", () => {
     expect(s.turns).toHaveLength(2);
     expect(s.turns[1].text).toBe("Hola mundo!");
     expect(s.turns[1].tools).toHaveLength(1);
+  });
+});
+
+describe("EasyBits: historial con `pending`", () => {
+  it("las tarjetas abiertas entran al montar y el attach no las duplica", () => {
+    let s = applyHistory(createPilotState(), [{ role: "user", text: "hola" }], [card]);
+    expect(s.turns).toHaveLength(1);
+    expect(s.permissions.map((p) => p.id)).toEqual(["act_1"]);
+    s = replay(s, [["started", {}], ["permission", card], ["idle", {}]]);
+    expect(s.permissions).toHaveLength(1);
+    // Con la pantalla ya pintada, el historial no pisa los turnos.
+    const again = applyHistory(s, [{ role: "user", text: "otro" }], [card]);
+    expect(again).toBe(s);
   });
 });

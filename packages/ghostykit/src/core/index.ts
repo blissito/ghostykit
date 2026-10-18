@@ -4,6 +4,7 @@ export {
   RESTART_NOTICE,
   RESUME_TEXT,
   appendAgentMessages,
+  applyHistory,
   beginSend,
   createPilotState,
   dropLastExchange,

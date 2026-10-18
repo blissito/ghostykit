@@ -4,6 +4,7 @@ export { usePilot, useSseTransport, type PermissionAnswer, type PermissionHandle
 export { AgentBubble, CopyUserMessage, DeliveryChips, ReplyOptionButtons, TurnFooter, UsageStats, UserBubble, type AgentBubbleProps } from "./Bubble";
 export { AgentSteps, ClawIcon, DEFAULT_TOOL_ICONS, Narration, ToolRow } from "./Steps";
 export { LinkSafetyModal, Markdown } from "./Markdown";
+export { InlineMarkdown, renderInline } from "./InlineMarkdown";
 export { useTextAtPace } from "./TextAtPace";
 export { Composer, ModelPicker, mimeOf, type ComposerProps, type UploadResult } from "./Composer";
 export { ConfirmCard, DecisionLines } from "./ConfirmCard";
@@ -18,6 +19,7 @@ export {
   createPostStreamTransport,
   createSseTransport,
   readSse,
+  type PilotHistory,
   type PilotListener,
   type PilotTransport,
   type PostStreamTransportOptions,

@@ -94,6 +94,11 @@ export interface PilotoProps extends UsePilotOptions {
    * `transport.respondPermission`. Devuelve `{resolved:false}` si ya no estaba abierto.
    */
   onPermission?: PermissionHandler;
+  /**
+   * Una pregunta lista en la caja (sin mandarla) y el foco en ella: al abrir el copiloto desde una
+   * fila («Pídeselo»). Cambiar el texto —o `key`, para repetir el mismo— la vuelve a poner.
+   */
+  draft?: string | { text: string; key?: string | number } | null;
   /** Referencias controladas (si no, Piloto las guarda; agrégalas con `ref.addReference`). */
   references?: Reference[];
   onReferencesChange?: (refs: Reference[]) => void;
@@ -151,8 +156,19 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
     [props.references, props.onReferencesChange],
   );
 
-  const [draft, setDraftState] = useState<{ text: string; n: number }>({ text: "", n: 0 });
+
   const composerBox = useRef<HTMLDivElement>(null);
+  const draftText = typeof props.draft === "string" ? props.draft : props.draft?.text;
+  const draftKey = typeof props.draft === "object" && props.draft ? props.draft.key : undefined;
+  const [draft, setDraftState] = useState<{ text: string; n: number }>(() => ({ text: draftText ?? "", n: 0 }));
+  const draftSeen = useRef(`${draftText}\u0000${draftKey}`);
+  useEffect(() => {
+    const id = `${draftText}\u0000${draftKey}`;
+    if (draftText == null || id === draftSeen.current) return;
+    draftSeen.current = id;
+    // El composer se vuelve a montar con el texto y se enfoca solo (cursor al final).
+    setDraftState((d) => ({ text: draftText, n: d.n + 1 }));
+  }, [draftText, draftKey]);
 
   const send = useCallback(
     (text: string, attachments: Attachment[] = []) => {
@@ -338,15 +354,23 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
     <PilotoContext.Provider value={config}>
       <div {...rootProps(theme, props.skin)} data-busy={busy || undefined} className={`piloto ${props.className ?? ""}`} style={props.style}>
         {empty ? (
-          <div className="piloto-empty flex min-h-0 flex-1 flex-col items-center justify-center px-4 pb-[8vh]">
+          // Si no cabe (panel bajo, saludo largo), se desplaza en vez de recortarse: el centrado es con
+          // márgenes automáticos, que nunca empujan contenido fuera del contenedor.
+          <div className="piloto-empty">
             {slots.headerActions && <div className="absolute right-4 top-3 flex gap-2">{slots.headerActions}</div>}
+            <div className="piloto-empty-inner">
             {!connected && slowConnect ? (
               <ConnectingState phase={phase} error={error} avatar={props.avatar} />
             ) : (
               (slots.emptyState ?? (
                 <div className="piloto-welcome mb-6 flex flex-col items-center gap-3 text-center">
                   {props.avatar}
-                  {props.welcome && <div className="text-2xl font-semibold text-text-primary">{props.welcome}</div>}
+                  {props.welcome && (
+                    // Un saludo largo (una explicación) va en letra de lectura; uno corto, en la de cartel.
+                    <div className="piloto-welcome-text" data-long={typeof props.welcome === "string" && props.welcome.length > 60 ? "" : undefined}>
+                      {props.welcome}
+                    </div>
+                  )}
                 </div>
               ))
             )}
@@ -354,6 +378,7 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
               {slots.aboveComposer}
               {composer}
               {props.suggestions && <Suggestions items={props.suggestions} onPick={(s) => send(s)} onPrefill={(s) => setDraftState((d) => ({ text: s, n: d.n + 1 }))} />}
+            </div>
             </div>
           </div>
         ) : (

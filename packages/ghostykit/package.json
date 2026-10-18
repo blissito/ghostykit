@@ -1,6 +1,6 @@
 {
   "name": "ghostykit",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Piloto UI \u2014 the in-app copilot chat from Ghosty Studio: streaming, agent steps, attachments, voice, reconnection and human approval cards. Pure event reducer + SSE transport + React components.",
   "type": "module",
   "main": "./dist/core/index.js",

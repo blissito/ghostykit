@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   RESUME_TEXT,
   appendAgentMessages,
+  applyHistory,
   beginSend,
   createPilotState,
   dropLastExchange,
@@ -139,8 +140,10 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
     if (transport.history && !optsRef.current.initialTurns) {
       transport
         .history()
-        .then((turns) => {
-          if (!gone && turns.length && !ref.current.turns.length) commit({ ...ref.current, turns, effects: [] });
+        .then((h) => {
+          if (gone) return;
+          const { turns, permissions } = Array.isArray(h) ? { turns: h, permissions: [] } : h;
+          commit(applyHistory(ref.current, turns, permissions));
         })
         .catch(() => {})
         .finally(subscribe);

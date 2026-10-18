@@ -8,8 +8,8 @@
 //        reintenta con el MISMO turnId).
 //   GET  {url}?attach=1 → started, un `permission` por tarjeta abierta, snapshot, y en vivo.
 //   GET  {url} → { messages:[{role,text}], pending, activeTurn, lastTurn }  (historial)
-import type { SendInput, SendResult, Turn } from "../core/types";
-import { PilotHttpError, type PilotListener, type PilotTransport, type SubscribeOptions } from "./types";
+import type { PermissionRequest, SendInput, SendResult, Turn } from "../core/types";
+import { PilotHttpError, type PilotHistory, type PilotListener, type PilotTransport, type SubscribeOptions } from "./types";
 
 /** Un evento SSE ya separado: nombre + data crudo. */
 export interface SseMessage {
@@ -65,8 +65,8 @@ export interface PostStreamTransportOptions {
   attachUrl?: string | null;
   /** URL del historial (JSON). Default `url`; `null` = sin historial. */
   historyUrl?: string | null;
-  /** Cómo leer el historial. Default: `{messages:[{role:"user"|"agent",text}]}`. */
-  parseHistory?: (json: unknown) => Turn[];
+  /** Cómo leer el historial. Default: `{messages:[{role:"user"|"agent",text}], pending:[permission…]}`. */
+  parseHistory?: (json: unknown) => Turn[] | PilotHistory;
   /** URL para cancelar (POST). Sin ella, «detener» sólo deja de escuchar: el turno sigue en el servidor. */
   cancelUrl?: string;
   /** Silencio (sin un solo byte, ni `: ka`) tras el que la conexión se da por muerta. Default 60 s. */
@@ -89,11 +89,23 @@ function parse(raw: string): unknown {
   }
 }
 
-function defaultHistory(json: unknown): Turn[] {
-  const msgs = (json as { messages?: { role?: string; text?: string }[] } | null)?.messages ?? [];
-  return msgs
+/** `{messages:[{role,text}], pending:[permission…]}` → turnos + tarjetas abiertas. */
+function defaultHistory(json: unknown): PilotHistory {
+  const j = json as { messages?: { role?: string; text?: string }[]; pending?: unknown[] } | null;
+  const turns = (j?.messages ?? [])
     .filter((m) => typeof m.text === "string")
     .map((m) => ({ role: m.role === "user" ? ("user" as const) : ("assistant" as const), text: m.text! }));
+  // Las tarjetas vienen con la forma del evento `permission` (a veces con su `type`).
+  const permissions = (j?.pending ?? [])
+    .filter((p): p is Record<string, unknown> => typeof p === "object" && p !== null && typeof (p as { id?: unknown }).id === "string")
+    .map((p) => ({
+      id: p.id as string,
+      title: String(p.title ?? ""),
+      ...(typeof p.tool === "string" ? { tool: p.tool } : {}),
+      options: Array.isArray(p.options) ? (p.options as PermissionRequest["options"]) : [],
+      ...(p.expiresAt != null ? { expiresAt: p.expiresAt as string | number } : {}),
+    }));
+  return { turns, permissions };
 }
 
 function uuid(): string {
@@ -214,9 +226,9 @@ export function createPostStreamTransport(
     },
 
     async history() {
-      if (!historyUrl) return [];
+      if (!historyUrl) return { turns: [] };
       const res = await doFetch(historyUrl, { credentials, headers: { accept: "application/json" } });
-      if (!res.ok) return [];
+      if (!res.ok) return { turns: [] };
       return (opts.parseHistory ?? defaultHistory)(await res.json().catch(() => null));
     },
 

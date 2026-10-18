@@ -70,6 +70,7 @@
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   isolation: isolate;
+  container-type: inline-size;
 }
 
 /* ── Ghosty, oscuro: la sombra dura se vuelve lavanda (negro sobre negro no se ve). ── */
@@ -432,14 +433,47 @@
   border: var(--piloto-border-width) solid var(--piloto-border);
   box-shadow: 3px 3px 0 var(--piloto-shadow-color);
 }
-.piloto .piloto-welcome > div {
+/* El estado vacío: si no cabe, se desplaza (nunca recorta el saludo ni la sombra del composer). */
+.piloto .piloto-empty {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 16px 24px;
+}
+.piloto .piloto-empty-inner {
+  margin: auto 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-bottom: 6vh;
+}
+.piloto .piloto-welcome-text {
   font-family: var(--piloto-font-display);
   font-weight: 800;
-  font-size: clamp(30px, 5vw, 44px);
+  /* Al ancho del CONTENEDOR (un panel lateral no es la ventana). */
+  font-size: clamp(26px, 8cqi, 44px);
   line-height: 1;
   letter-spacing: 0.01em;
   max-width: 18ch;
+  color: var(--piloto-text);
+  text-wrap: balance;
 }
+.piloto .piloto-welcome-text[data-long] {
+  font-family: var(--piloto-font);
+  font-weight: 600;
+  font-size: clamp(16px, 4.2cqi, 19px);
+  line-height: 1.45;
+  letter-spacing: 0;
+  max-width: 44ch;
+  color: var(--piloto-text-2);
+}
+.piloto .piloto-narration-text code { background: var(--piloto-surface-2); padding: 0.05rem 0.3rem; border-radius: 4px; font-size: 0.88em; font-family: var(--piloto-font-mono); }
+.piloto .piloto-narration-text strong { font-weight: 700; color: var(--piloto-text); }
+.piloto .piloto-narration-text a { text-decoration: underline; text-decoration-color: var(--piloto-accent); text-underline-offset: 2px; }
 .piloto .piloto-wait-time { margin-left: 0.7em; color: var(--piloto-text-3); font-variant-numeric: tabular-nums; }
 .piloto .piloto-system-note { border: var(--piloto-hairline) solid var(--piloto-border-2); }
 

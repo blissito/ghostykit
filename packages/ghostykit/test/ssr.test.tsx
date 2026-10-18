@@ -22,3 +22,31 @@ describe("SSR", () => {
     expect(thread).toContain("Worked 3 s");
   });
 });
+
+describe("0.2.1 — lo que encontró el primer adoptante", () => {
+  it("la narración entre pasos pinta su markdown en línea (no `**` crudos)", () => {
+    const html = renderToString(
+      <Piloto
+        transport={null}
+        initialTurns={[
+          { role: "user", text: "hola" },
+          { role: "assistant", text: "Reviso **los crons** y `monitor`.Listo.", cuts: [33], tools: [{ id: "a", status: "completed" }] },
+        ]}
+      />,
+    );
+    expect(html).toContain("<strong>los crons</strong>");
+    expect(html).toContain("<code>monitor</code>");
+    expect(html).not.toContain("**los crons**");
+  });
+
+  it("`draft` deja la pregunta escrita en la caja", () => {
+    const html = renderToString(<Piloto transport={null} draft={{ text: "¿Por qué falló el monitor?", key: 1 }} />);
+    expect(html).toContain("¿Por qué falló el monitor?</textarea>");
+  });
+
+  it("un saludo largo va en letra de lectura", () => {
+    const html = renderToString(<Piloto transport={null} welcome={"Pregúntame por qué falló un cron, cuándo corre o qué pasó en sus últimas corridas."} />);
+    expect(html).toMatch(/piloto-welcome-text" data-long=""/);
+    expect(html).toContain('class="piloto-empty"');
+  });
+});

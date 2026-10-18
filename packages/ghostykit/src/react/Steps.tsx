@@ -25,6 +25,7 @@ import { useState, type ReactNode } from "react";
 import { groupSteps, isRunning, stepLabel, summarizeTools, toolName } from "../core/steps";
 import type { ToolEntry } from "../core/types";
 import { usePiloto, type PilotIcon } from "./context";
+import { InlineMarkdown } from "./InlineMarkdown";
 
 /** La garra de máquina de peluches: el ícono de «usó una herramienta» que no tiene clase propia. */
 export function ClawIcon({ className }: { className?: string }) {
@@ -193,7 +194,9 @@ export function Narration({ steps, children }: { steps: string[]; children?: Rea
           <span className="mt-[3px] grid size-4 shrink-0 place-items-center rounded-full bg-brand-500/15 text-brand-600">
             <CheckMini />
           </span>
-          <span className="min-w-0">{p}</span>
+          <span className="piloto-narration-text min-w-0">
+            <InlineMarkdown>{p}</InlineMarkdown>
+          </span>
         </li>
       ))}
       {children}

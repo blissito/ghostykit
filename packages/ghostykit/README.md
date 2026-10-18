@@ -107,6 +107,7 @@ const ref = useRef<PilotoHandle>(null);
   agentName="Admin assistant"
   welcome="How can I help with your crons?"
   suggestions={["Why did the monitor fail?"]}
+  draft={{ text: "Why did the monitor fail?", key: row.id }} // prefilled + focused, not sent
   context={() => ({ screen: "crons", selected })}            // sent with EVERY turn
   toolVerbs={{ run_cron: { one: "Ran a cron", many: "Ran %n crons", running: "Running the cron…" } }}
   upload={async (file) => ({ url: await myUpload(file) })}

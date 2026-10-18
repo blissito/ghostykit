@@ -131,13 +131,17 @@ describe("createPostStreamTransport (contrato de EasyBits)", () => {
     expect(events).toEqual(["started", "idle", "started", "chunk", "started", "snapshot", "done"]);
   });
 
-  it("historial: `{messages:[{role,text}]}` → turnos", async () => {
-    const { fetch } = fakeFetch([() => Response.json({ messages: [{ role: "user", text: "hola" }, { role: "agent", text: "- ✓ Reviso.\n\nListo." }], pending: [] })]);
+  it("historial: turnos + las tarjetas de `pending` (sin esperar al attach)", async () => {
+    const card = { type: "permission", id: "act_1", title: "Correr purge", tool: "run_cron", expiresAt: "2099-01-01T00:00:00Z", options: [{ optionId: "approve", name: "Aprobar", kind: "allow_once" }] };
+    const { fetch } = fakeFetch([() => Response.json({ messages: [{ role: "user", text: "hola" }, { role: "agent", text: "- ✓ Reviso.\n\nListo." }], pending: [card], activeTurn: null })]);
     const t = createPostStreamTransport("/chat", { fetch });
-    expect(await t.history!()).toEqual([
-      { role: "user", text: "hola" },
-      { role: "assistant", text: "- ✓ Reviso.\n\nListo." },
-    ]);
+    expect(await t.history!()).toEqual({
+      turns: [
+        { role: "user", text: "hola" },
+        { role: "assistant", text: "- ✓ Reviso.\n\nListo." },
+      ],
+      permissions: [{ id: "act_1", title: "Correr purge", tool: "run_cron", expiresAt: "2099-01-01T00:00:00Z", options: card.options }],
+    });
   });
 
   it("continuar un turno interrumpido manda `continueTurnId`", async () => {

@@ -527,6 +527,18 @@ export function resolvePermission(
   return s;
 }
 
+/**
+ * El historial guardado (al montar): el hilo, si la pantalla sigue vacía, y las tarjetas de permiso
+ * que siguen abiertas (sin duplicar las que el stream ya trajo).
+ */
+export function applyHistory(prev: PilotState, turns: Turn[], permissions: PermissionRequest[] = []): PilotState {
+  let s: PilotState = { ...prev, effects: [] };
+  if (turns.length && !prev.turns.length) s.turns = turns;
+  const fresh = permissions.filter((p) => !prev.permissions.some((q) => q.id === p.id));
+  if (fresh.length) s.permissions = [...prev.permissions, ...fresh];
+  return s.turns === prev.turns && !fresh.length ? prev : s;
+}
+
 /** Un mensaje del agente que entró fuera de un turno (el remate de los subagentes). */
 export function appendAgentMessages(prev: PilotState, texts: string[]): PilotState {
   if (!texts.length) return prev;
