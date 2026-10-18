@@ -198,3 +198,26 @@ describe("createAgUiTransport", () => {
     expect(got).toEqual(['{"type":"RUN_STARTED"}']);
   });
 });
+
+describe("un run sobrevive a su cliente y se detiene sólo explícito", () => {
+  it("abrir el hilo con un run vivo: snapshot y luego sus eventos en vivo, hasta la tarjeta", () => {
+    let s = replay(createPilotState(), "agui-open-live.sse");
+    expect(s.busy).toBe(false);
+    expect(s.turns.map((t) => t.role)).toEqual(["user", "assistant"]);
+    expect(s.turns[1].tools?.map((t) => t.title)).toEqual(["list_crons", "run_cron"]);
+    expect(s.permissions[0]).toMatchObject({ tool: "run_cron" });
+    // Mientras corría, estaba ocupado (los puntitos y «Detener»).
+    s = createPilotState();
+    s = reduceAgUiEvent(s, events("agui-open-live.sse")[0]);
+    expect(s.busy).toBe(true);
+  });
+
+  it("detener: el run leído termina en `cancelled` sin tarjetas, y la respuesta del cancel también", () => {
+    let s = replay(beginSend(createPilotState(), "¿Por qué falló el monitor?", [], 1), "agui-cancelled-run.sse");
+    expect(s.busy).toBe(false);
+    expect(s.permissions).toEqual([]);
+    expect(s.turns[1].text).toContain("Reviso tus crons.");
+    s = replay(s, "agui-cancel.sse");
+    expect(s.busy).toBe(false);
+  });
+});

@@ -29,7 +29,7 @@ import {
   UsersRound,
 } from "lucide-react";
 import { useState } from "react";
-import { groupSteps, isRunning, stepLabel, summarizeTools, toolName } from "../core/steps";
+import { groupSteps, isRunning, stepLabel, summarizeTools, toolNames } from "../core/steps";
 import type { ToolEntry } from "../core/types";
 import { usePiloto, type PilotIcon } from "./context";
 import { InlineMarkdown } from "./InlineMarkdown";
@@ -116,8 +116,8 @@ export const DEFAULT_TOOL_ICONS: Record<string, PilotIcon> = {
 };
 
 function iconFor(t: ToolEntry, icons: Record<string, PilotIcon>): PilotIcon {
-  const name = toolName(t);
-  return (name && icons[name]) || (t.kind && (icons[t.kind] ?? DEFAULT_TOOL_ICONS[t.kind])) || ClawIcon;
+  for (const name of toolNames(t)) if (icons[name]) return icons[name];
+  return (t.kind && (icons[t.kind] ?? DEFAULT_TOOL_ICONS[t.kind])) || ClawIcon;
 }
 
 /** Cuántos pasos se ven sin desplegar. En vivo y plegada son los MISMOS: al cerrar no cambia el alto. */

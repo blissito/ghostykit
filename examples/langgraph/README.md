@@ -16,4 +16,5 @@ Then open the playground pointed at it:
 
 `src/server.ts` is the whole backend side of [docs/protocol.md](../../docs/protocol.md): the adapter does
 §3–§4 (events, interrupt/resume), and the file adds §5 (a request with no new message answers
-`MESSAGES_SNAPSHOT` plus the pending approval) and §6 (closing the connection stops the run).
+`MESSAGES_SNAPSHOT`, then the live run or the pending approval) and §6 (a run survives its client
+going away; `forwardedProps.cancel` stops it; `409` if one is already running).

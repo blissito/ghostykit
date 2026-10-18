@@ -108,6 +108,8 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
   transportRef.current = transport;
   const [threadId] = useState(() => opts.threadId ?? uuid());
   const ctrl = useRef<AbortController | null>(null);
+  /** El `runId` del run que este cliente arrancó y sigue vivo (para detenerlo). */
+  const liveRun = useRef<string | null>(null);
   /** Respuestas a tarjetas que esperan a las demás (un resume debe cubrirlas todas). */
   const answers = useRef(new Map<string, { status: "resolved" | "cancelled"; payload?: unknown }>());
 
@@ -141,6 +143,7 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
       ctrl.current?.abort();
       const c = new AbortController();
       ctrl.current = c;
+      if (input.messages.length || input.resume?.length) liveRun.current = input.runId;
       optsRef.current.onSend?.(input);
       let ended = false;
       try {
@@ -149,7 +152,10 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
           (e) => {
             if (c.signal.aborted) return;
             optsRef.current.onEvent?.(e);
-            if (e.type === "RUN_FINISHED" || e.type === "RUN_ERROR") ended = true;
+            if (e.type === "RUN_FINISHED" || e.type === "RUN_ERROR") {
+              ended = true;
+              liveRun.current = null;
+            }
             commit(reduceAgUiEvent(ref.current, e as never));
           },
           c.signal,
@@ -203,10 +209,24 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
   );
 
   const stop = useCallback(() => {
+    // Dejar de leer NO detiene el run (desconectarse nunca cancela): se pide explícito.
+    // `cancel` es el runId con el que se arrancó el run (docs/protocol.md §6): el que mandó este cliente
+    // o, si se enganchó a uno vivo al abrir el hilo, el de su RUN_STARTED.
+    const run = liveRun.current ?? (ref.current.busy ? ref.current.runId : null);
+    liveRun.current = null;
     ctrl.current?.abort();
     ctrl.current = null;
     commit(stopTurn(ref.current));
-  }, [commit]);
+    const t = transportRef.current;
+    if (!t || !run) return;
+    const ctx = optsRef.current.context;
+    void t
+      .run(
+        { threadId, runId: uuid(), messages: [], tools: [], context: toAgUiContext(typeof ctx === "function" ? (ctx as () => unknown)() : ctx), state: {}, forwardedProps: { cancel: run } },
+        () => {},
+      )
+      .catch(() => {});
+  }, [commit, threadId]);
 
   const retry = useCallback(() => {
     const s = ref.current;

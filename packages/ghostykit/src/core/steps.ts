@@ -17,18 +17,35 @@ export type ToolVerbs = Record<string, ToolVerb>;
 /** ¿Sigue corriendo? `pending` también: es el instante entre pedirla y arrancarla. */
 export const isRunning = (t: ToolEntry) => t.status !== "completed" && t.status !== "failed";
 
-/** `mcp__servidor__nombre` → `nombre`; cualquier otro título, tal cual. */
-export function toolName(t: ToolEntry): string | null {
+/**
+ * Los nombres con los que se puede buscar el verbo/ícono de una herramienta, del más específico al
+ * menos: el título tal cual, y sin el prefijo de MCP. Los MCP la nombran `mcp__servidor__tool` (dos
+ * guiones bajos) o `mcp_servidor_tool` (uno, visto en EasyBits); como el servidor y la tool también
+ * llevan guiones bajos, con uno solo se prueban todos los cortes: `mcp_easy_bits_list_crons` →
+ * `easy_bits_list_crons`, `bits_list_crons`, `list_crons`, `crons`.
+ */
+export function toolNames(t: ToolEntry): string[] {
   const title = t.title ?? "";
-  const m = /^mcp__[^_]+(?:_[^_]+)*?__([a-z0-9_]+)$/i.exec(title);
-  if (m) return m[1];
-  return title || null;
+  if (!title) return [];
+  const out = [title];
+  const double = /^mcp__.+?__(.+)$/i.exec(title);
+  if (double) out.push(double[1]);
+  else if (/^mcp_/i.test(title)) {
+    const parts = title.slice(4).split("_");
+    for (let i = 0; i < parts.length; i++) out.push(parts.slice(i).join("_"));
+  }
+  return [...new Set(out)];
+}
+
+/** El nombre «corto» de la herramienta (sin el prefijo de MCP de dos guiones bajos). */
+export function toolName(t: ToolEntry): string | null {
+  const names = toolNames(t);
+  return /^mcp__/i.test(names[0] ?? "") ? (names[1] ?? names[0]) : (names[0] ?? null);
 }
 
 /** El verbo propio de ESTA herramienta (por nombre), si la app lo dio. */
 function namedVerb(t: ToolEntry, verbs: ToolVerbs): { key: string; verb: ToolVerb } | null {
-  const name = toolName(t);
-  if (name && verbs[name]) return { key: name, verb: verbs[name] };
+  for (const name of toolNames(t)) if (verbs[name]) return { key: name, verb: verbs[name] };
   return null;
 }
 

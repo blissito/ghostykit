@@ -13,6 +13,7 @@ import {
   summarizeTools,
   systemNoteOf,
   toolName,
+  toolNames,
 } from "../src/core";
 
 describe("narración", () => {
@@ -89,5 +90,15 @@ describe("texto", () => {
     expect(systemNoteOf("⏰ Tarea programada (Reporte diario). Instrucciones…")).toBe("reporte diario");
     expect(systemNoteOf("hola")).toBeNull();
     expect([45, 180, 3900].map(formatDuration)).toEqual(["45 s", "3 min", "1 h 05 min"]);
+  });
+});
+
+describe("nombres de herramienta de MCP", () => {
+  it("`mcp_servidor_tool` (un guion bajo, como en EasyBits) también encuentra su verbo", () => {
+    const verbs = { list_crons: { one: "Revisé los crons", many: "Revisé los crons" } };
+    expect(stepLabel({ id: "1", title: "mcp_easybits_list_crons", status: "completed" }, verbs)).toBe("Revisé los crons");
+    expect(stepLabel({ id: "1", title: "mcp_easy_bits_list_crons", status: "completed" }, verbs)).toBe("Revisé los crons");
+    expect(stepLabel({ id: "1", title: "mcp__easybits__list_crons", status: "completed" }, verbs)).toBe("Revisé los crons");
+    expect(toolNames({ id: "1", title: "mcp_a_b_c" })).toEqual(["mcp_a_b_c", "a_b_c", "b_c", "c"]);
   });
 });

@@ -110,4 +110,34 @@ describe("usePilot sobre AG-UI", () => {
     expect(pilot().state.turns.map((t) => t.role)).toEqual(["user", "assistant"]);
     act(() => root.unmount());
   });
+
+  it("detener corta la lectura y pide el cancel EXPLÍCITO del run (desconectarse no cancela)", async () => {
+    const inputs: RunAgentInput[] = [];
+    let release: () => void = () => {};
+    const transport: PilotTransport = {
+      async run(input, onEvent, signal) {
+        inputs.push(input);
+        if (input.forwardedProps?.cancel) {
+          for (const e of events("agui-cancel.sse")) onEvent(e);
+          return;
+        }
+        onEvent({ type: "RUN_STARTED", threadId: input.threadId, runId: input.runId } as never);
+        await new Promise<void>((r) => {
+          release = r;
+          signal?.addEventListener("abort", () => r());
+        });
+      },
+    };
+    const { pilot, root } = await mount(transport);
+    await act(async () => {
+      void pilot().send("¿Por qué falló el monitor?");
+    });
+    expect(pilot().state.busy).toBe(true);
+    await act(async () => pilot().stop());
+    await act(async () => {});
+    expect(pilot().state.busy).toBe(false);
+    expect(inputs[1]).toMatchObject({ threadId: inputs[0].threadId, messages: [], forwardedProps: { cancel: inputs[0].runId } });
+    release();
+    act(() => root.unmount());
+  });
 });
