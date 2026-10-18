@@ -97,7 +97,7 @@ export interface PilotoProps extends UsePilotOptions {
    */
   onPermission?: PermissionHandler;
   /**
-   * Una pregunta lista en la caja (sin mandarla) y el foco en ella: al abrir el copiloto desde una
+   * Una pregunta lista en la caja (sin mandarla) y el foco en ella: al abrir el piloto desde una
    * fila («Pídeselo»). Cambiar el texto —o `key`, para repetir el mismo— la vuelve a poner.
    */
   draft?: string | { text: string; key?: string | number } | null;
@@ -388,7 +388,7 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
                 <div className="mb-6 flex flex-col items-center">
                   {props.avatar && <div className="mb-3">{props.avatar}</div>}
                   {props.welcome && (
-                    // Un saludo largo (una explicación del copiloto) baja a letra de lectura.
+                    // Un saludo largo (una explicación del piloto) baja a letra de lectura.
                     <h1
                       className={
                         typeof props.welcome === "string" && props.welcome.length > 60

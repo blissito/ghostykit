@@ -1,12 +1,13 @@
 # Piloto UI · `ghostykit`
 
-**An in-app copilot for React.** Piloto UI is the agent chat from
+**An autopilot for your React app, not a copilot.** You don't drive: you say where you're going and
+the agent flies the app for you, stopping only to ask before anything risky. Piloto UI is the agent chat from
 [Ghosty Studio](https://www.ghosty.studio) (`/c`), packaged as a library: same components, same
 markup, same look ([side by side](https://raw.githubusercontent.com/blissito/ghostykit/main/docs/screenshots/parity/desktop-done-gs-vs-ghostykit.png)). You drop it into an app you already
 have. It sees what the user has on screen, streams what the agent says and does, and **stops to ask
 before anything risky** (human in the loop).
 
-> El copiloto de tu app: el chat de Ghosty, probado en producción, como biblioteca. Español por default, inglés incluido.
+> El piloto de tu app, no el copiloto: tú no manejas, vas de pasajero y le dices a dónde ir. Es el chat de Ghosty, probado en producción, como biblioteca. Español por default, inglés incluido.
 
 **[Open the playground →](https://blissito.github.io/ghostykit/)** (a fake backend, a real chat)
 
@@ -22,7 +23,7 @@ before anything risky** (human in the loop).
 - **The composer**: attachments (you provide `upload`), voice notes (you provide `transcribe`), stop, model picker and reply-option buttons.
 - **Solid core**: the whole chat state is a pure reducer, `reducePilotEvent(state, name, data)`, tested by replaying real SSE sessions.
 
-> **En español:** Piloto UI le da a tu app un copiloto completo con un solo componente. Tus usuarios ven la respuesta escribirse en vivo y cada paso del agente («Leí 2 archivos»), y aprueban o rechazan cualquier acción riesgosa con una tarjeta antes de que ocurra. El agente sabe qué pantalla y qué registro está viendo la persona. El chat se recupera solo de cortes de red y de deploys sin perder el turno, y trae adjuntos, notas de voz y botón para detener. Por dentro, todo el estado es una función pura probada con sesiones reales, así que se puede actualizar sin miedo.
+> **En español:** Piloto UI le pone piloto a tu app con un solo componente: la persona dice qué quiere y el agente lo hace por ella. Tus usuarios ven la respuesta escribirse en vivo y cada paso del agente («Leí 2 archivos»), y aprueban o rechazan cualquier acción riesgosa con una tarjeta antes de que ocurra. El agente sabe qué pantalla y qué registro está viendo la persona. El chat se recupera solo de cortes de red y de deploys sin perder el turno, y trae adjuntos, notas de voz y botón para detener. Por dentro, todo el estado es una función pura probada con sesiones reales, así que se puede actualizar sin miedo.
 
 ## 30-second quickstart
 
@@ -35,8 +36,8 @@ import { Piloto, useSseTransport } from "ghostykit";
 import "ghostykit/styles.css";
 import "ghostykit/fonts.css"; // optional: the house typefaces
 
-export function Copilot() {
-  const transport = useSseTransport("/api/copilot/conversations/123");
+export function Pilot() {
+  const transport = useSseTransport("/api/pilot/conversations/123");
   return <Piloto transport={transport} />;
 }
 ```
