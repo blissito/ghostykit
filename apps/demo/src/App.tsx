@@ -26,6 +26,34 @@ export function App() {
   const onTurnDone = (info: TurnDoneInfo) =>
     setLog((l) => [`onTurnDone · ${info.seconds ?? "?"} s · ${info.text.length} letras${info.interrupted ? " · interrumpido" : ""}`, ...l].slice(0, 4));
 
+  // `?parity=1`: sólo el chat, con lo mismo que /c de Ghosty, para compararlos lado a lado.
+  if (q.get("parity") === "1") {
+    return (
+      <div style={{ height: "100%" }}>
+        <Piloto
+          transport={transport}
+          agentName="Ghosty"
+          skin={skin}
+          theme={dark ? "dark" : "light"}
+          avatar={<img src="https://formmy.app/logo.png" alt="" width={72} height={72} className="parity-ghost" />}
+          welcome="¿Qué estás pensando?"
+          suggestions={["Hazme una cotización en PDF", "Arma una landing para mi negocio", "Escribe un mensaje de seguimiento", "Redacta un documento"]}
+          upload={async (f) => ({ url: URL.createObjectURL(f) })}
+          transcribe={async () => ""}
+          features={{ models: false }}
+          // Lo propio de cada app va por slots: aquí, «Mis archivos» como en Ghosty.
+          slots={{
+            composerExtras: (
+              <button type="button" aria-label="De mis archivos" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-text-secondary transition-colors hover:bg-background-secondary hover:text-text-primary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2" /></svg>
+              </button>
+            ),
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className={`demo ${dark ? "demo-dark" : ""}`}>
       <aside className="panel">

@@ -1,7 +1,8 @@
 # Piloto UI · `ghostykit`
 
 **An in-app copilot for React.** Piloto UI is the agent chat from
-[Ghosty Studio](https://www.ghosty.studio), packaged as a library. You drop it into an app you already
+[Ghosty Studio](https://www.ghosty.studio) (`/c`), packaged as a library: same components, same
+markup, same look ([side by side](https://raw.githubusercontent.com/blissito/ghostykit/main/docs/screenshots/parity/desktop-done-gs-vs-ghostykit.png)). You drop it into an app you already
 have. It sees what the user has on screen, streams what the agent says and does, and **stops to ask
 before anything risky** (human in the loop).
 
@@ -131,9 +132,11 @@ your own layout.
 ### Skins and theming
 
 `ghostykit/styles.css` is self-contained and scoped under `.piloto`. It works the same with
-**Tailwind 3, Tailwind 4 or no Tailwind** (verified in a Tailwind 3 app: its utilities compute
-identically with and without Piloto's CSS). Every color, radius, border width and shadow is a
-variable:
+**Tailwind 3, Tailwind 4 or no Tailwind**, and it shields its fields from the host's CSS (verified
+in a Tailwind 3 app **with `@tailwindcss/forms`**: Piloto's textarea gets no border or focus ring, and
+the app's own utilities compute identically with and without Piloto's CSS). Sizes don't depend on
+the host's `html` font size either: `1rem` inside Piloto is `--piloto-rem` (18 px in the Ghosty skin,
+like ghosty.studio; 16 px in the others). Every color, radius, border width and shadow is a variable:
 
 ```css
 .my-app .piloto {
@@ -142,6 +145,7 @@ variable:
   --piloto-radius-card: 6px;
   --piloto-border-width: 3px;
   --piloto-shadow-hero: 6px 6px 0 #0f766e;
+  --piloto-rem: 16px;
   --piloto-font: "Your Sans", sans-serif;
 }
 ```

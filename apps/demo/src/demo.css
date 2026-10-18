@@ -31,3 +31,4 @@ body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-se
   .demo { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
   .panel { max-height: 38vh; border-right: 0; border-bottom: 1px solid #e1e3e7; padding: 16px; }
 }
+.parity-ghost { width: 64px; height: 64px; }

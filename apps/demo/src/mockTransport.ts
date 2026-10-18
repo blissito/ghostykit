@@ -63,6 +63,15 @@ const cronsTurn: Script = async ({ emit, ask, input }) => {
   emit("done", { turnId });
 };
 
+/** El mismo pedido que se usa contra ghosty.studio en las capturas de paridad. */
+const cafeTurn: Script = async ({ emit }) => {
+  const turnId = `t${Date.now()}`;
+  emit("status", { phase: "session" });
+  await sleep(900);
+  await stream(emit, "1. Café Brasa Nocturna\n2. Grano & Calle\n3. Cúmulo Café", turnId);
+  emit("done", { turnId });
+};
+
 /** Un turno corto, sin pasos: para cualquier otra pregunta. */
 const chatTurn: Script = async ({ emit, input }) => {
   const turnId = `t${Date.now()}`;
@@ -104,7 +113,7 @@ export function createMockTransport(): PilotTransport {
     },
     async send(input) {
       cancelled = false;
-      const script = /cron|monitor|purga|falló|fallo/i.test(input.text) ? cronsTurn : chatTurn;
+      const script = /cafeter/i.test(input.text) ? cafeTurn : /cron|monitor|purga|falló|fallo/i.test(input.text) ? cronsTurn : chatTurn;
       const ask = (req: Permission) =>
         new Promise<string>((resolve) => {
           waiting.set(req.id, resolve);
