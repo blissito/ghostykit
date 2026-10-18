@@ -327,3 +327,18 @@ describe("Piloto 0.5.0", () => {
     expect(html).toContain("subagentes 3");
   });
 });
+
+describe("ghosty.tool", () => {
+  it("pone el rótulo del servidor, que gana sobre los verbos, y no queda en turn.custom", async () => {
+    const { stepLabel } = await import("../src/core");
+    const s = run(createPilotState(), [
+      { type: "RUN_STARTED", runId: "r" },
+      { type: "TOOL_CALL_START", toolCallId: "t1", toolCallName: "Read" },
+      { type: "CUSTOM", name: "ghosty.tool", value: { toolCallId: "t1", title: "Leyendo cotizacion.pdf", kind: "read", path: "/w/cotizacion.pdf" } },
+    ]);
+    const tool = s.turns[0].tools![0];
+    expect(tool).toMatchObject({ title: "Read", label: "Leyendo cotizacion.pdf", kind: "read", path: "/w/cotizacion.pdf", status: "in_progress" });
+    expect(stepLabel(tool, { Read: { one: "Leyó", many: "Leyó %n", running: "Leyendo…" } })).toBe("Leyendo cotizacion.pdf");
+    expect(s.turns[0].custom).toBeUndefined();
+  });
+});

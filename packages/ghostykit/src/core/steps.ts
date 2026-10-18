@@ -51,6 +51,7 @@ function namedVerb(t: ToolEntry, verbs: ToolVerbs): { key: string; verb: ToolVer
 
 /** El rótulo de un paso: el verbo de su nombre, o el título que manda el servidor, o su clase. */
 export function stepLabel(t: ToolEntry, verbs: ToolVerbs, fallback = "Paso"): string {
+  if (t.label) return t.label;
   const named = namedVerb(t, verbs);
   if (named) return isRunning(t) && named.verb.running ? named.verb.running : named.verb.one;
   return t.title ?? t.kind ?? fallback;

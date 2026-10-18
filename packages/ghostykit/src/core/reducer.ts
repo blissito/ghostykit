@@ -28,7 +28,7 @@ export function createPilotState(turns: Turn[] = []): PilotState {
 }
 
 /** Los `CUSTOM` que son fontanería del protocolo, no contenido del turno. */
-const PROTOCOL_CUSTOM = new Set(["ghosty.title", "ghosty.injected", "ghosty.history"]);
+const PROTOCOL_CUSTOM = new Set(["ghosty.title", "ghosty.injected", "ghosty.history", "ghosty.tool"]);
 
 type Ev = { type: string; [k: string]: any };
 
@@ -268,6 +268,18 @@ export function reduceAgUiEvent(prev: PilotState, e: Ev, now: number = Date.now(
     case "CUSTOM":
       if (e.name === "ghosty.title") return { ...s, effects: [{ type: "title", title: e.value?.title }] };
       if (e.name === "ghosty.history") return { ...s, historyNext: toHistory(e.value) };
+      if (e.name === "ghosty.tool") {
+        // El rótulo localizado del paso, puesto por el servidor.
+        const v = (e.value ?? {}) as { toolCallId?: unknown; title?: unknown; kind?: unknown; path?: unknown; detail?: unknown };
+        if (typeof v.toolCallId !== "string") return s;
+        const str = (x: unknown) => (typeof x === "string" && x ? x : undefined);
+        const patch: Partial<ToolEntry> = {};
+        if (str(v.title)) patch.label = str(v.title);
+        if (str(v.kind)) patch.kind = str(v.kind);
+        if (str(v.path)) patch.path = str(v.path);
+        if (str(v.detail)) patch.detail = str(v.detail);
+        return upsertTool(s, v.toolCallId, patch);
+      }
       if (typeof e.name !== "string" || PROTOCOL_CUSTOM.has(e.name)) return s;
       return patchAssistant(s, (t) => ({ ...t, custom: [...(t.custom ?? []), { name: e.name, value: e.value, ...(typeof e.timestamp === "number" ? { timestamp: e.timestamp } : {}) }] }));
     default:

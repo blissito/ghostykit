@@ -19,6 +19,8 @@ export interface ToolEntry {
   id: string;
   /** El nombre de la herramienta (`toolCallName`): es la llave de los verbos de la app. */
   title?: string;
+  /** El rótulo que puso el servidor (`CUSTOM ghosty.tool`): gana sobre los verbos de la app. */
+  label?: string;
   kind?: string;
   /** `in_progress` mientras corre; `completed` | `failed` con su resultado; `pending` = espera
    *  aprobación; `cancelled` = el run se detuvo antes de que terminara. */

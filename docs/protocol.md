@@ -91,10 +91,10 @@ How each one shows up in the chat:
 | Event | In the chat |
 |---|---|
 | `TEXT_MESSAGE_*` (assistant) | The answer, written live. Text before a tool call becomes a "narration" step (✓ line). |
-| `TOOL_CALL_START` … `END` | A step ("Reading the history…") with a spinner. The tool name is the label key, so apps can name it in their own words. |
+| `TOOL_CALL_START` … `END` | A step ("Reading the history…") with a spinner. The tool name is the label key, so apps can name it in their own words; a `CUSTOM ghosty.tool` (§7) overrides it with the server's label. |
 | `TOOL_CALL_RESULT` | The step turns into a check. If the tool failed, add `"metadata": {"error": true}` to the event and the step turns red. |
 | `REASONING_MESSAGE_*` | Optional: the collapsible "Thinking…" block. |
-| `STEP_STARTED` / `STEP_FINISHED` | Optional. While nothing else is on screen, a step whose `stepName` the app has a label for (`strings.steps`, built in: `waking`, `session`) replaces the waiting phrase. Other names are not drawn, so framework node names never leak into the chat. |
+| `STEP_STARTED` / `STEP_FINISHED` | Optional. While nothing else is on screen, a step whose `stepName` the app has a label for (`strings.steps`, built in: `waking`, `session`, `compacting`) replaces the waiting phrase. Other names are not drawn, so framework node names never leak into the chat. |
 | `STATE_SNAPSHOT` / `STATE_DELTA` | Optional. The agent's shared state, given to the app as `pilot.state.agentState` (`STATE_DELTA` is an RFC 6902 JSON Patch over the last snapshot; a patch that doesn't apply is ignored until the next snapshot). One key has meaning for the client: `caps.steer: true` turns on steer (§6). |
 | `CUSTOM` | Kept in the turn as `turn.custom[]` (`{name, value, timestamp}`) for the app to draw (`renderDeliveries`), except the protocol ones in §7. |
 | `RUN_FINISHED` `usage` | Optional: tokens/cost under the answer (`[{model, inputTokens, outputTokens}]`). |
@@ -177,7 +177,7 @@ connection, it posts a run **with no new message**:
 The backend answers:
 
 ```text
-RUN_STARTED       {threadId, runId: "run_8a90"}
+RUN_STARTED       {threadId, runId}
 MESSAGES_SNAPSHOT {messages: [ …the whole stored thread, AG-UI messages… ]}
 then ONE of:
   · a run is still going on this thread → its events from now on, live, until it ends
@@ -192,6 +192,10 @@ then ONE of:
 There is no event replay and no `Last-Event-ID`: the snapshot is the source of truth. Message ids
 must be stable (the client uses them to join history pages).
 
+- **A response that attaches to a live run opens with that run's id.** Reconnecting, steering (§6)
+  or repeating a `runId` all answer `RUN_STARTED {runId: "<the live run's id>"}`, not the request's
+  id. That is the id the client sends in `forwardedProps.cancel`. With nothing live, `RUN_STARTED`
+  carries the request's `runId`.
 - **A live run is part of the snapshot.** It includes what the live run has said so far; the events
   that follow continue from there.
 - **What a turn delivered** (files, artifacts: the `CUSTOM` events of §7 that the app draws) goes
@@ -238,6 +242,7 @@ A later snapshot keeps the loaded pages when it starts at a message the client a
   ```json
   { "threadId": "th_2f1c", "runId": "run_8b10", "messages": [ { "id": "msg_07", "role": "user", "content": "also check the purge" } ], "forwardedProps": { "steer": "run_8a77" } }
   ```
+  A user message without `steer` while a run is live gets `409 run_active`.
   The backend adds the message to that run (the agent reads it at its next step) and answers with
   the **rest of the live run**, as if reconnecting: `RUN_STARTED {runId: "run_8a77"}` →
   `CUSTOM ghosty.injected {messageId: "msg_07"}` → the run's events until its `RUN_FINISHED`. The
@@ -259,7 +264,7 @@ A later snapshot keeps the loaded pages when it starts at a message the client a
 
 ## 7. Custom events
 
-All optional. Names starting with `ghosty.` are reserved for this list. The first three are part of
+All optional. Names starting with `ghosty.` are reserved for this list. The first four are part of
 the protocol; the client handles them and doesn't keep them in the turn. The rest are content: they
 go to `turn.custom[]` for the app to draw, and every event also reaches the app through `onEvent`.
 
@@ -268,7 +273,8 @@ go to `turn.custom[]` for the app to draw, and every event also reaches the app 
 | `ghosty.title` | `{ "title": "Monitor timeouts" }` | The backend named the thread (for a sidebar). |
 | `ghosty.history` | `{ "hasMoreBefore": true, "before": "<cursor>" }` | Sent right before `MESSAGES_SNAPSHOT`: there are older messages (§5). |
 | `ghosty.injected` | `{ "messageId": "msg_07" }` | A steer message entered the live run (§6). |
-| `ghosty.delivery` | `{ "tipo", "nombre", "fileId", "url", "mime", "size", "captura" }` | The turn delivered a file or artifact. **A URL, never base64.** Also stored in the message's `custom` (§5). |
+| `ghosty.tool` | `{ "toolCallId", "title", "kind", "path"?, "detail"? }` | The localized label of a step, sent after its `TOOL_CALL_START`. `title` wins over the app's `toolVerbs`; `kind` picks the icon. |
+| `ghosty.delivery` | `{ "id", "messageId", "url", "tipo", "nombre", "fileId", "mime", "size", "captura" }` | The turn delivered a file or artifact. **A URL, never base64.** Also stored in the message's `custom` (§5), including the pages `loadOlder` returns. |
 | `ghosty.ui` | `{ "action": "…", … }` | The agent asks the app to do something on screen (move or open a card). |
 | `ghosty.reply_to` | `{ "messageId": "…" }` | The answer replies to a specific earlier message. |
 | `ghosty.attachments_failed` | `{ "names": ["…"] }` | Attachments of the user's message the agent couldn't read. |
