@@ -1,7 +1,7 @@
 // Un transporte de mentira que habla el MISMO contrato que el servidor de Ghosty: abre el stream
 // en reposo y, al mandar, reproduce un turno realista (narración, pasos, un permiso, markdown, uso).
 // Es el playground: todo lo que se ve aquí es lo que vería una app real.
-import type { PilotListener, PilotTransport, SendInput } from "ghostykit";
+import type { PilotListener, PilotTransport, SendInput } from "ghosty-autopilot";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -79,7 +79,7 @@ const chatTurn: Script = async ({ emit, input }) => {
   await sleep(700);
   await stream(
     emit,
-    `Recibí: «${input.text.slice(0, 80)}».\n\nEsto es el **playground** de Piloto: el transporte es de mentira, pero el chat es el de verdad. Prueba con *«¿por qué falló el monitor?»* para ver pasos y una tarjeta de aprobación.\n\n\`\`\`ts\nimport { Piloto, createSseTransport } from "ghostykit";\nimport "ghostykit/styles.css";\n\n<Piloto transport={createSseTransport("/api/chat")} />\n\`\`\``,
+    `Recibí: «${input.text.slice(0, 80)}».\n\nEsto es el **playground** de Piloto: el transporte es de mentira, pero el chat es el de verdad. Prueba con *«¿por qué falló el monitor?»* para ver pasos y una tarjeta de aprobación.\n\n\`\`\`ts\nimport { Piloto, createSseTransport } from "ghosty-autopilot";\nimport "ghosty-autopilot/styles.css";\n\n<Piloto transport={createSseTransport("/api/chat")} />\n\`\`\``,
     turnId,
   );
   emit("done", { turnId });

@@ -1,17 +1,17 @@
-# Piloto UI · `ghostykit`
+# Ghosty Autopilot · `ghosty-autopilot`
 
 **An autopilot for your React app, not a copilot.** You don't drive: you say where you're going and
-the agent flies the app for you, stopping only to ask before anything risky. Piloto UI is the agent chat from
+the agent flies the app for you, stopping only to ask before anything risky. Ghosty Autopilot is the agent chat from
 [Ghosty Studio](https://www.ghosty.studio) (`/c`), packaged as a library: same components, same
-markup, same look ([side by side](https://raw.githubusercontent.com/blissito/ghostykit/main/docs/screenshots/parity/desktop-done-gs-vs-ghostykit.png)). You drop it into an app you already
+markup, same look ([side by side](https://raw.githubusercontent.com/blissito/ghosty-autopilot/main/docs/screenshots/parity/desktop-done-gs-vs-ghosty-autopilot.png)). You drop it into an app you already
 have. It sees what the user has on screen, streams what the agent says and does, and **stops to ask
 before anything risky** (human in the loop).
 
 > El piloto de tu app, no el copiloto: tú no manejas, vas de pasajero y le dices a dónde ir. Es el chat de Ghosty, probado en producción, como biblioteca. Español por default, inglés incluido.
 
-**[Open the playground →](https://blissito.github.io/ghostykit/)** (a fake backend, a real chat)
+**[Open the playground →](https://blissito.github.io/ghosty-autopilot/)** (a fake backend, a real chat)
 
-![The permission pass: the agent asks before running a cron](https://raw.githubusercontent.com/blissito/ghostykit/main/docs/screenshots/ghosty-light-desktop-2-permission.png)
+![The permission pass: the agent asks before running a cron](https://raw.githubusercontent.com/blissito/ghosty-autopilot/main/docs/screenshots/ghosty-light-desktop-2-permission.png)
 
 ## What you get
 
@@ -23,18 +23,18 @@ before anything risky** (human in the loop).
 - **The composer**: attachments (you provide `upload`), voice notes (you provide `transcribe`), stop, model picker and reply-option buttons.
 - **Solid core**: the whole chat state is a pure reducer, `reducePilotEvent(state, name, data)`, tested by replaying real SSE sessions.
 
-> **En español:** Piloto UI le pone piloto a tu app con un solo componente: la persona dice qué quiere y el agente lo hace por ella. Tus usuarios ven la respuesta escribirse en vivo y cada paso del agente («Leí 2 archivos»), y aprueban o rechazan cualquier acción riesgosa con una tarjeta antes de que ocurra. El agente sabe qué pantalla y qué registro está viendo la persona. El chat se recupera solo de cortes de red y de deploys sin perder el turno, y trae adjuntos, notas de voz y botón para detener. Por dentro, todo el estado es una función pura probada con sesiones reales, así que se puede actualizar sin miedo.
+> **En español:** Ghosty Autopilot le pone piloto a tu app con un solo componente: la persona dice qué quiere y el agente lo hace por ella. Tus usuarios ven la respuesta escribirse en vivo y cada paso del agente («Leí 2 archivos»), y aprueban o rechazan cualquier acción riesgosa con una tarjeta antes de que ocurra. El agente sabe qué pantalla y qué registro está viendo la persona. El chat se recupera solo de cortes de red y de deploys sin perder el turno, y trae adjuntos, notas de voz y botón para detener. Por dentro, todo el estado es una función pura probada con sesiones reales, así que se puede actualizar sin miedo.
 
 ## 30-second quickstart
 
 ```bash
-npm i ghostykit motion streamdown
+npm i ghosty-autopilot motion streamdown
 ```
 
 ```tsx
-import { Piloto, useSseTransport } from "ghostykit";
-import "ghostykit/styles.css";
-import "ghostykit/fonts.css"; // optional: the house typefaces
+import { Piloto, useSseTransport } from "ghosty-autopilot";
+import "ghosty-autopilot/styles.css";
+import "ghosty-autopilot/fonts.css"; // optional: the house typefaces
 
 export function Pilot() {
   const transport = useSseTransport("/api/pilot/conversations/123");
@@ -43,6 +43,10 @@ export function Pilot() {
 ```
 
 `<Piloto transport={…} />` works with nothing else. Give its container a height: Piloto fills it.
+
+> **Names.** The product is **Ghosty Autopilot**; the component is still `<Piloto>`, and the rest of the
+> API keeps its names (`usePilot`, `PilotTransport`, the `.piloto` class and the `--piloto-*` variables),
+> so nothing breaks when you upgrade.
 
 ## Transports
 
@@ -94,8 +98,8 @@ that is already running. Approvals usually go through your own route:
 
 ### 3. Your own
 
-Implement `PilotTransport` and emit the same event names (see `ghostykit/core` types). If you only need
-the state, use the reducer directly: `ghostykit/core` has no React dependency.
+Implement `PilotTransport` and emit the same event names (see `ghosty-autopilot/core` types). If you only need
+the state, use the reducer directly: `ghosty-autopilot/core` has no React dependency.
 
 ## Make it yours
 
@@ -134,7 +138,7 @@ your own layout.
 
 ### Skins and theming
 
-`ghostykit/styles.css` is self-contained and scoped under `.piloto`. It works the same with
+`ghosty-autopilot/styles.css` is self-contained and scoped under `.piloto`. It works the same with
 **Tailwind 3, Tailwind 4 or no Tailwind**, and it shields its fields from the host's CSS (verified
 in a Tailwind 3 app **with `@tailwindcss/forms`**: Piloto's textarea gets no border or focus ring, and
 the app's own utilities compute identically with and without Piloto's CSS). Sizes don't depend on
@@ -155,7 +159,7 @@ like ghosty.studio; 16 px in the others). Every color, radius, border width and 
 
 | Ghosty | EasyBits | Neutral |
 |---|---|---|
-| ![Ghosty skin](https://raw.githubusercontent.com/blissito/ghostykit/main/docs/screenshots/ghosty-light-mobile-2-permission.png) | ![EasyBits skin, dark](https://raw.githubusercontent.com/blissito/ghostykit/main/docs/screenshots/easybits-dark-mobile-2-permission.png) | ![Neutral skin](https://raw.githubusercontent.com/blissito/ghostykit/main/docs/screenshots/neutral-light-mobile-2-permission.png) |
+| ![Ghosty skin](https://raw.githubusercontent.com/blissito/ghosty-autopilot/main/docs/screenshots/ghosty-light-mobile-2-permission.png) | ![EasyBits skin, dark](https://raw.githubusercontent.com/blissito/ghosty-autopilot/main/docs/screenshots/easybits-dark-mobile-2-permission.png) | ![Neutral skin](https://raw.githubusercontent.com/blissito/ghosty-autopilot/main/docs/screenshots/neutral-light-mobile-2-permission.png) |
 
 ## Accessibility
 
@@ -166,7 +170,7 @@ like ghosty.studio; 16 px in the others). Every color, radius, border width and 
 
 ## The repo
 
-- `packages/ghostykit`: the package (`core`, `transport`, `react`, `pointer`, `styles.css`, `fonts.css`)
+- `packages/ghosty-autopilot`: the package (`core`, `transport`, `react`, `pointer`, `styles.css`, `fonts.css`)
 - `apps/demo`: the playground (Vite, simulated transport, skin switcher)
 
 ```bash
@@ -174,6 +178,21 @@ npm install
 npm test        # reducer, both transports, parsers, SSR
 npm run build   # dist/ (JS + .d.ts + styles.css)
 npm run demo    # http://localhost:5173
+```
+
+## Migrating from `ghostykit`
+
+`ghostykit` was this package's earlier name (0.1–0.3). Same code, same API: install
+`ghosty-autopilot` and change the import path.
+
+```diff
+- npm i ghostykit
++ npm i ghosty-autopilot
+
+- import { Piloto } from "ghostykit";
+- import "ghostykit/styles.css";
++ import { Piloto } from "ghosty-autopilot";
++ import "ghosty-autopilot/styles.css";
 ```
 
 ## License

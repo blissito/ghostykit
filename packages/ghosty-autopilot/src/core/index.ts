@@ -1,4 +1,4 @@
-// ghostykit/core — el estado del chat sin React: tipos, reductor puro y parsers.
+// ghosty-autopilot/core — el estado del chat sin React: tipos, reductor puro y parsers.
 export * from "./types";
 export {
   RESTART_NOTICE,

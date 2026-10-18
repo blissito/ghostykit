@@ -1,4 +1,4 @@
-// ghostykit/pointer — «Señalar» con `@ghostystudio/pointer`: un elemento elegido en una página se
+// ghosty-autopilot/pointer — «Señalar» con `@ghostystudio/pointer`: un elemento elegido en una página se
 // vuelve una referencia del mensaje, con el renglón exacto que el agente sabe leer.
 import { pickedKind, pickedLineLabel, pickedSnippet } from "@ghostystudio/pointer/kind";
 import { pickedElementLine, type PickedElement } from "@ghostystudio/pointer/picked";

@@ -238,7 +238,7 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
     async (id: string, optionId: string, via?: PermissionHandler) => {
       const t = transportRef.current;
       const handler: PermissionHandler | undefined = via ?? (t?.respondPermission ? (a, b) => t.respondPermission!(a, b) : undefined);
-      if (!handler) throw new Error("ghostykit: el transporte no sabe contestar permisos (pasa `onPermission`)");
+      if (!handler) throw new Error("ghosty-autopilot: el transporte no sabe contestar permisos (pasa `onPermission`)");
       const asked = ref.current.permissions.find((p) => p.id === id);
       const r = await handler(id, optionId);
       // Contestada o vencida, la tarjeta sale de las abiertas y queda anotada en la respuesta.

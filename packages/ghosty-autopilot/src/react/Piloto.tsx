@@ -205,7 +205,7 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
     const req = permissions.find((p) => p.id === id);
     if (req) setHeld((h) => ({ ...h, [id]: req }));
     const handler = props.onPermission ?? (transport?.respondPermission ? (a: string, b: string) => transport.respondPermission!(a, b) : undefined);
-    if (!handler) throw new Error("ghostykit: falta `onPermission` (el transporte no contesta permisos)");
+    if (!handler) throw new Error("ghosty-autopilot: falta `onPermission` (el transporte no contesta permisos)");
     try {
       return await handler(id, optionId);
     } catch (e) {

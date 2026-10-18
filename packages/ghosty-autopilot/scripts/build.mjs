@@ -1,4 +1,4 @@
-// El JS de ghostykit: ESM, un archivo por entrada y lo compartido en chunks. React, motion,
+// El JS de ghosty-autopilot: ESM, un archivo por entrada y lo compartido en chunks. React, motion,
 // streamdown y el señalador quedan afuera (peers); los íconos de lucide se empaquetan (sólo los usados).
 import { build } from "esbuild";
 

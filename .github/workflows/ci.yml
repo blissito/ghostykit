@@ -23,4 +23,4 @@ jobs:
       - run: npm test
       - run: npm run build
       - name: Demo
-        run: npm run build -w ghostykit-demo
+        run: npm run build -w ghosty-autopilot-demo

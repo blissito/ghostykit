@@ -1,4 +1,4 @@
-// ghostykit (y ghostykit/react) — el chat de Piloto para React.
+// ghosty-autopilot (y ghosty-autopilot/react) — el chat de Piloto para React.
 export { Piloto, Piloto as default, type PilotoFeatures, type PilotoHandle, type PilotoProps, type PilotoSlots } from "./Piloto";
 export { usePilot, useSseTransport, type PermissionAnswer, type PermissionHandler, type Pilot, type SendOptions, type TurnDoneInfo, type UsePilotOptions } from "./usePilot";
 export { AgentBubble, CopyUserMessage, DeliveryChips, ReplyOptionButtons, TurnFooter, UsageStats, UserBubble, type AgentBubbleProps } from "./Bubble";
@@ -12,7 +12,7 @@ export { ReferenceChips, Suggestions } from "./Chips";
 export { ConnectingState, TypingDots, WaitLabel } from "./Status";
 export { PilotoContext, usePiloto, type MarkdownOptions, type PilotIcon, type PilotoConfig, type PilotTheme } from "./context";
 export { STRINGS_EN, STRINGS_ES, type PilotStrings } from "./strings";
-// Lo de core y transport, para quien sólo instala `ghostykit`.
+// Lo de core y transport, para quien sólo instala `ghosty-autopilot`.
 export * from "../core";
 export {
   PilotHttpError,

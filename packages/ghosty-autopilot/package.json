@@ -1,7 +1,7 @@
 {
-  "name": "ghostykit",
-  "version": "0.3.2",
-  "description": "Piloto UI — the autopilot chat for your app, from Ghosty Studio: streaming, agent steps, attachments, voice, reconnection and human approval cards. Pure event reducer + SSE transport + React components.",
+  "name": "ghosty-autopilot",
+  "version": "0.4.0",
+  "description": "Ghosty Autopilot \u2014 the autopilot chat for your app, from Ghosty Studio: streaming, agent steps, attachments, voice, reconnection and human approval cards. Pure event reducer + SSE transport + React components.",
   "type": "module",
   "main": "./dist/core/index.js",
   "types": "./dist/core/index.d.ts",
@@ -88,8 +88,8 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/blissito/ghostykit.git",
-    "directory": "packages/ghostykit"
+    "url": "git+https://github.com/blissito/ghosty-autopilot.git",
+    "directory": "packages/ghosty-autopilot"
   },
-  "homepage": "https://github.com/blissito/ghostykit#readme"
+  "homepage": "https://github.com/blissito/ghosty-autopilot#readme"
 }

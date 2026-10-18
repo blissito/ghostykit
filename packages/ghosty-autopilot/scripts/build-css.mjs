@@ -68,7 +68,7 @@ const remToVar = async (css) =>
 const tw = readFileSync(tmp, "utf8");
 const scoped = await remToVar((await postcss([scope]).process(tw, { from: tmp })).css);
 const base = await remToVar(readFileSync(join(pkg, "src/styles/base.css"), "utf8"));
-const banner = "/* ghostykit — Piloto UI · MIT · https://github.com/blissito/ghostykit */\n";
+const banner = "/* ghosty-autopilot — Ghosty Autopilot · MIT · https://github.com/blissito/ghosty-autopilot */\n";
 // La piel va DESPUÉS: a igual especificidad, sus piezas con nombre ganan a las utilidades.
 writeFileSync(join(pkg, "dist/styles.css"), `${banner}/* ── Utilidades (Tailwind v4, encerradas en .piloto) ── */\n${scoped}\n/* ── La piel ── */\n${base}`);
 writeFileSync(join(pkg, "dist/fonts.css"), readFileSync(join(pkg, "src/styles/fonts.css"), "utf8"));

@@ -1,5 +1,5 @@
 {
-  "name": "ghostykit-demo",
+  "name": "ghosty-autopilot-demo",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "ghostykit": "*",
+    "ghosty-autopilot": "*",
     "motion": "^12.38.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

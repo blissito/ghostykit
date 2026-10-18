@@ -1,4 +1,4 @@
-// ghostykit/transport — por dónde viaja la conversación. La interfaz es chica a propósito: un stream
+// ghosty-autopilot/transport — por dónde viaja la conversación. La interfaz es chica a propósito: un stream
 // de eventos con nombre, mandar, cancelar y (opcional) modelo y permisos. `createSseTransport` habla
 // el contrato de Ghosty Studio (`${base}/events|messages|cancel|model|permission`).
 import type { SendInput, SendResult } from "../core/types";
@@ -80,7 +80,7 @@ export function createSseTransport(base: string, opts: SseTransportOptions = {})
   return {
     subscribe(listener, sub = {}) {
       const ES = opts.EventSource ?? (globalThis as { EventSource?: typeof EventSource }).EventSource;
-      if (!ES) throw new Error("ghostykit: no hay EventSource en este entorno (pasa `EventSource` en las opciones)");
+      if (!ES) throw new Error("ghosty-autopilot: no hay EventSource en este entorno (pasa `EventSource` en las opciones)");
       let es: EventSource | null = null;
       let heartbeatMs: number | null = null;
       let closed = false;

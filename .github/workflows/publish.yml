@@ -1,11 +1,11 @@
-name: Publish ghostykit
+name: Publish ghosty-autopilot
 
-# Subir `version` en packages/ghostykit/package.json y luego publicar con el tag `vX.Y.Z` (o a mano). Sin tokens:
-# npm Trusted Publishing (OIDC) confía en ESTE workflow (npmjs.com → ghostykit → Settings → Trusted
-# Publisher: blissito/ghostykit, publish.yml). Se publica SÓLO si la versión no está en npm: un
+# Subir `version` en packages/ghosty-autopilot/package.json y luego publicar con el tag `vX.Y.Z` (o a mano). Sin tokens:
+# npm Trusted Publishing (OIDC) confía en ESTE workflow (npmjs.com → ghosty-autopilot → Settings → Trusted
+# Publisher: blissito/ghosty-autopilot, publish.yml). Se publica SÓLO si la versión no está en npm: un
 # re-run salta limpio; un error real falla.
 #
-# ⚠️ La PRIMERA publicación la hace el dueño a mano (`npm publish` desde packages/ghostykit): npm no
+# ⚠️ La PRIMERA publicación la hace el dueño a mano (`npm publish` desde packages/ghosty-autopilot): npm no
 # deja configurar el Trusted Publisher de un paquete que todavía no existe.
 
 # Publicar es una DECISIÓN, no un efecto de cada push: sólo a mano (Actions → Run workflow) o al
@@ -39,7 +39,7 @@ jobs:
         run: npm ci
 
       - name: Probar, construir y publicar
-        working-directory: packages/ghostykit
+        working-directory: packages/ghosty-autopilot
         run: |
           npm run typecheck
           npm test
