@@ -52,6 +52,15 @@ export function mimeOf(file: File): string {
   return BY_EXTENSION[ext] ?? "application/octet-stream";
 }
 
+/** ¿Cabe en un `accept` («image/*,.pdf,application/json»)? */
+export function accepts(accept: string, name: string, mime: string): boolean {
+  return accept
+    .split(",")
+    .map((x) => x.trim().toLowerCase())
+    .filter(Boolean)
+    .some((rule) => (rule.startsWith(".") ? name.toLowerCase().endsWith(rule) : rule.endsWith("/*") ? mime.startsWith(rule.slice(0, -1)) : mime === rule));
+}
+
 const isText = (mime: string) => mime.startsWith("text/") || mime === "application/json" || mime.endsWith("+json") || mime.endsWith("+xml");
 
 function shortSize(bytes: number): string {
@@ -103,6 +112,8 @@ export interface ComposerProps {
   extrasEnd?: ReactNode;
   /** Para agregar adjuntos desde afuera. */
   handleRef?: Ref<ComposerHandle>;
+  /** Qué se puede adjuntar (como el `accept` de un input). Default: todo. */
+  accept?: string;
   maxFiles?: number;
   maxFileMb?: number;
 }
@@ -129,6 +140,7 @@ export function Composer({
   extras,
   extrasEnd,
   handleRef,
+  accept,
   maxFiles = 8,
   maxFileMb = 25,
 }: ComposerProps) {
@@ -195,6 +207,10 @@ export function Composer({
             rejected.push(t.tooBig(file.name, maxFileMb));
             continue;
           }
+          if (accept && !accepts(accept, file.name, mime)) {
+            rejected.push(t.cantUpload(file.name));
+            continue;
+          }
           if (next.length >= maxFiles) {
             rejected.push(t.tooMany(maxFiles));
             break;
@@ -216,7 +232,7 @@ export function Composer({
       setNotice(rejected.length ? rejected.join(" · ") : null);
       ref.current?.focus({ preventScroll: true });
     },
-    [busy, canSeeImages, upload, maxFiles, maxFileMb, t],
+    [busy, canSeeImages, upload, maxFiles, maxFileMb, accept, t],
   );
 
   // Soltar archivos en CUALQUIER parte: la capa cubre la pantalla mientras se arrastra. Sólo si lo
@@ -529,6 +545,7 @@ export function Composer({
             {withFiles && (
               <>
                 {/* Dos botones: «imagen» depende de que el modelo VEA; «archivo», no. */}
+                {(!accept || accepts(accept, "x.png", "image/png")) && (
                 <button
                   type="button"
                   onClick={() => {
@@ -543,13 +560,15 @@ export function Composer({
                 >
                   <ImageIcon className="h-4 w-4" />
                 </button>
+                )}
                 {/* Lo propio de la app (en Ghosty, «Mis archivos») va entre imagen y archivo. */}
                 {extras}
+                {(!accept || !/^\s*image\/\*\s*$/.test(accept)) && (
                 <button
                   type="button"
                   onClick={() => {
                     if (!fileRef.current) return;
-                    fileRef.current.accept = "";
+                    fileRef.current.accept = accept ?? "";
                     fileRef.current.click();
                   }}
                   disabled={busy || files.length >= maxFiles}
@@ -559,6 +578,7 @@ export function Composer({
                 >
                   <Paperclip className="h-4 w-4" />
                 </button>
+                )}
               </>
             )}
             {!withFiles && extras}

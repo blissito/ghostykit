@@ -307,3 +307,102 @@ describe("0.7.0 con la lista de gs (/c)", () => {
 });
 
 type RunAgentInputLike = { messages: { content: unknown }[] };
+
+describe("0.7.0: gs-agui y MailMask", () => {
+  const mmTurn = {
+    role: "assistant" as const,
+    text: "Revisé tu cuenta. Tienes 1 dominio.\n\nSus registros DNS están bien. [Ver DNS](#ir-dns)",
+    cuts: [35],
+    tools: [{ id: "c1", title: "list_domains", status: "completed" }],
+  };
+
+  it("features.narration=false: el texto antes de la herramienta es respuesta, no paso; el paso lleva una llave, no la garra", () => {
+    const pilot = fakePilot({ turns: [{ role: "user", text: "¿cuántos?" }, mmTurn] });
+    const on = renderToString(<Piloto transport={null} pilot={pilot} />);
+    expect(on).toContain("gs-narracion");
+    const off = renderToString(<Piloto transport={null} pilot={pilot} features={{ narration: false }} />);
+    expect(off).not.toContain("gs-narracion");
+    expect(off).toContain("Revisé tu cuenta");
+    expect(off).toContain("lucide-wrench");
+  });
+
+  it("markdown.components pinta un enlace como CTA con ctx; message.avatar va junto a la respuesta; beforeSend reescribe lo que sale", async () => {
+    const sent: unknown[] = [];
+    const transport: PilotTransport = {
+      async run(input, onEvent) {
+        sent.push(input.messages[0]?.content);
+        onEvent({ type: "RUN_STARTED", runId: input.runId } as unknown as BaseEvent);
+        onEvent({ type: "RUN_FINISHED", runId: input.runId, outcome: { type: "success" } } as unknown as BaseEvent);
+      },
+    };
+    const mm = definePlugin({
+      name: "mailmask",
+      markdown: {
+        components: {
+          a: ({ href, children, ctx }) =>
+            String(href).startsWith("#ir-") ? (
+              <button type="button" data-cta="" onClick={() => ctx.setDraft("ir")}>
+                {children}
+              </button>
+            ) : (
+              <a href={String(href)}>{children}</a>
+            ),
+        },
+      },
+      message: { avatar: () => <img alt="Mask" src="/mask.png" />, beforeSend: (t) => `[Señalado: dominio] ${t}` },
+    });
+    const html = renderToString(<Piloto transport={null} pilot={fakePilot({ turns: [{ role: "user", text: "x" }, mmTurn] })} plugins={[mm]} features={{ narration: false }} />);
+    expect(html).toMatch(/<button type="button" data-cta="">Ver DNS<\/button>/);
+    expect(html).toContain('alt="Mask"');
+    const el = document.createElement("div");
+    const root = createRoot(el);
+    let api: import("../src/react").PilotoHandle | null = null;
+    await act(async () => root.render(<Piloto ref={(h) => void (api = h)} transport={transport} plugins={[mm]} />));
+    await act(async () => {
+      api!.send("hola");
+      await new Promise((r) => setTimeout(r, 10));
+    });
+    expect(sent).toEqual(["[Señalado: dominio] hola"]);
+    await act(async () => root.unmount());
+  });
+
+  it("403 con x-needs-login: onHttpError avisa y composer.replace cambia la caja por la invitación", async () => {
+    const { PilotHttpError } = await import("../src/transport");
+    const seen: number[] = [];
+    const transport: PilotTransport = {
+      async run() {
+        throw new PilotHttpError("Se acabó la prueba.", 403, "needs_account", undefined, { "x-needs-login": "1" });
+      },
+    };
+    const demo = definePlugin({
+      name: "demo",
+      onHttpError: (e) => void seen.push(e.status),
+      composer: { replace: { when: (ctx) => ctx.pilot.state.httpError?.headers?.["x-needs-login"] === "1", view: () => <a href="/signup">Crea tu cuenta</a> } },
+    });
+    const el = document.createElement("div");
+    const root = createRoot(el);
+    let api: import("../src/react").PilotoHandle | null = null;
+    await act(async () => root.render(<Piloto ref={(h) => void (api = h)} transport={transport} plugins={[demo]} />));
+    expect(el.querySelector("textarea")).not.toBeNull();
+    await act(async () => {
+      api!.send("hola");
+      await new Promise((r) => setTimeout(r, 10));
+    });
+    expect(seen).toEqual([403]);
+    expect(el.querySelector("textarea")).toBeNull();
+    expect(el.textContent).toContain("Crea tu cuenta");
+    await act(async () => root.unmount());
+  });
+
+  it("composer.attachments.accept: sólo fotos (sin clip) y el filtro de lo que entra", async () => {
+    const { accepts } = await import("../src/react/Composer");
+    expect(accepts("image/*", "a.png", "image/png")).toBe(true);
+    expect(accepts("image/*", "a.pdf", "application/pdf")).toBe(false);
+    expect(accepts("image/*,.pdf", "A.PDF", "application/pdf")).toBe(true);
+    const html = renderToString(
+      <Piloto transport={null} pilot={fakePilot({})} plugins={[{ name: "fotos", composer: { attachments: { upload: async () => ({ url: "x" }), accept: "image/*", maxFiles: 4, maxBytes: 4 * 1024 * 1024 } } }]} />,
+    );
+    expect(html).toContain("Adjuntar imagen");
+    expect(html).not.toContain("Adjuntar archivo");
+  });
+});

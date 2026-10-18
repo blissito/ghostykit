@@ -417,7 +417,7 @@ function finish(s0: PilotState, e: Ev, now: number, failed = false): PilotState 
 /** El usuario manda un mensaje (o contesta una tarjeta: `text` vacío, sin burbuja). */
 export function beginSend(prev: PilotState, text: string, attachments: Attachment[] = [], now: number = Date.now()): PilotState {
   const turns = text || attachments.length ? [...prev.turns, { role: "user" as const, text, ...(attachments.length ? { attachments } : {}) }] : prev.turns;
-  return { ...prev, turns, busy: true, error: null, notice: null, cutRun: null, turnStartedAt: now, effects: [{ type: "turn-start" }] };
+  return { ...prev, turns, busy: true, error: null, notice: null, cutRun: null, httpError: null, turnStartedAt: now, effects: [{ type: "turn-start" }] };
 }
 
 /**

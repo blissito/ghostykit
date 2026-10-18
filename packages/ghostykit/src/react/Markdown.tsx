@@ -98,12 +98,14 @@ export function Markdown({ children, animate = false, className }: { children: s
     >
       {animate ? (
         <ChunksContext.Provider value={{ registry, part: 0 }}>
-          <Streamdown BlockComponent={ChunkedBlock} linkSafety={linkSafety}>
+          <Streamdown BlockComponent={ChunkedBlock} linkSafety={linkSafety} components={markdown.components}>
             {text}
           </Streamdown>
         </ChunksContext.Provider>
       ) : (
-        <Streamdown linkSafety={linkSafety}>{text}</Streamdown>
+        <Streamdown linkSafety={linkSafety} components={markdown.components}>
+          {text}
+        </Streamdown>
       )}
     </div>
   );

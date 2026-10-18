@@ -1,6 +1,6 @@
 // El playground: un panel de crons de mentira a la izquierda (lo que la app ya tiene) y Piloto a la
 // derecha. El panel le pasa `context` (qué pantalla y qué fila ves) y referencias con «@».
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Piloto, definePlugin, type PilotoHandle, type TurnDoneInfo } from "ghostykit";
 import { livePage, modelPicker } from "ghostykit/plugins";
 import { createMockTransport, setMockModel } from "./mockTransport";
@@ -17,6 +17,21 @@ const crons = definePlugin({
     },
   },
   composer: { attachments: { transcribe: async () => "¿por qué falló el monitor?" } },
+  // Un enlace `#cron-<nombre>` en la respuesta es un botón que selecciona ese cron en el panel.
+  markdown: {
+    components: {
+      a: ({ href, children }) =>
+        typeof href === "string" && href.startsWith("#cron-") ? (
+          <button type="button" className="cta" onClick={() => window.dispatchEvent(new CustomEvent("demo:select", { detail: href.slice(6) }))}>
+            {children} →
+          </button>
+        ) : (
+          <a href={String(href)} target="_blank" rel="noopener noreferrer">
+            {children}
+          </a>
+        ),
+    },
+  },
 });
 const PLUGINS = [crons, modelPicker({ onChange: (value) => setMockModel(value) }), livePage()];
 
@@ -60,6 +75,11 @@ export function App() {
   const [selected, setSelected] = useState<string | null>(null);
   const [log, setLog] = useState<string[]>([]);
   const [thread, setThread] = useState<string | null>(null);
+  useEffect(() => {
+    const pick = (e: Event) => setSelected((e as CustomEvent<string>).detail);
+    window.addEventListener("demo:select", pick);
+    return () => window.removeEventListener("demo:select", pick);
+  }, []);
 
   const onTurnDone = (info: TurnDoneInfo) =>
     setLog((l) => [`onTurnDone · ${info.seconds ?? "?"} s · ${info.text.length} letras${info.interrupted ? " · pide aprobación" : ""}`, ...l].slice(0, 4));

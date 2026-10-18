@@ -72,7 +72,7 @@ export function createMockTransport(): PilotTransport {
         if (approved) {
           await sleep(1200, signal);
           e({ type: "TOOL_CALL_RESULT", messageId: id("tool"), toolCallId: open.toolCallId, content: "ok en 1.8 s" });
-          await say(`${open.screen ? `Veo que estás en **${open.screen}**. ` : ""}Así van:\n\n${CRONS_TABLE}\n\nEl **monitor** falló por *timeout* contra la base. La purga ya corrió (corrida \`manual\`, 1.8 s, 312 notificaciones borradas).\n\nSi quieres, puedo:\n- Reintentar el monitor\n- Subirle el timeout a 30 s\n- Dejarlo así`);
+          await say(`${open.screen ? `Veo que estás en **${open.screen}**. ` : ""}Así van:\n\n${CRONS_TABLE}\n\nEl **monitor** falló por *timeout* contra la base. [Ver el monitor](#cron-monitor)\n\nLa purga ya corrió (corrida \`manual\`, 1.8 s, 312 notificaciones borradas).\n\nSi quieres, puedo:\n- Reintentar el monitor\n- Subirle el timeout a 30 s\n- Dejarlo así`);
         } else {
           e({ type: "TOOL_CALL_RESULT", messageId: id("tool"), toolCallId: open.toolCallId, content: "Rechazado por la persona." });
           await say("No corrí la purga. Cuando quieras, me dices.");

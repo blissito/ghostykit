@@ -14,6 +14,8 @@ export type PilotTheme = "light" | "dark" | "auto";
 export interface MarkdownOptions {
   /** Reescribe el markdown antes de pintarlo (p. ej. `#12` → `[#12](#folio-12)`). */
   transform?: (md: string, turn?: Turn) => string;
+  /** Cómo se pinta un elemento del markdown, por etiqueta (`a`, `code`…). */
+  components?: Record<string, ComponentType<any>>;
   /** Un clic en un enlace. Devuelve `true` si la app lo manejó (no se abre el aviso de salida). */
   onLinkClick?: (href: string, event: MouseEvent) => boolean;
 }

@@ -32,3 +32,16 @@ body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-se
   .panel { max-height: 38vh; border-right: 0; border-bottom: 1px solid #e1e3e7; padding: 16px; }
 }
 .parity-ghost { width: 64px; height: 64px; }
+
+/* El CTA que dibuja el plugin «crons» (un enlace #cron-… como botón). Es de la app: lo estila la app. */
+.cta {
+  display: inline-flex;
+  margin: 4px 0;
+  padding: 6px 14px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}

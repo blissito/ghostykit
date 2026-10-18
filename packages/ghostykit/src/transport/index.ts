@@ -21,12 +21,15 @@ export class PilotHttpError extends Error {
   code?: string;
   /** Segundos de `Retry-After` (429/503). */
   retryAfter?: number;
-  constructor(message: string, status: number, code?: string, retryAfter?: number) {
+  /** Las cabeceras de la respuesta (minúsculas), p. ej. `x-needs-login`. */
+  headers?: Record<string, string>;
+  constructor(message: string, status: number, code?: string, retryAfter?: number, headers?: Record<string, string>) {
     super(message);
     this.name = "PilotHttpError";
     this.status = status;
     this.code = code;
     this.retryAfter = retryAfter;
+    this.headers = headers;
   }
 }
 
@@ -112,7 +115,9 @@ export function createAgUiTransport(opts: AgUiTransportOptions): PilotTransport 
         }
         if (!res.ok) {
           const json = (await res.json().catch(() => null)) as { error?: string; message?: string } | null;
-          throw new PilotHttpError(json?.message ?? json?.error ?? `Error ${res.status}`, res.status, json?.error, retryAfter);
+          const headers: Record<string, string> = {};
+          res.headers?.forEach?.((v, k) => void (headers[k.toLowerCase()] = v));
+          throw new PilotHttpError(json?.message ?? json?.error ?? `Error ${res.status}`, res.status, json?.error, retryAfter, headers);
         }
         if (!res.body) return;
         // La hora del servidor (header `Date`; en otro origen hace falta `Access-Control-Expose-Headers:

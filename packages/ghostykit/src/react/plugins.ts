@@ -12,7 +12,7 @@ import type { ComponentType, ReactNode } from "react";
 import type { BaseEvent } from "@ag-ui/core";
 import type { TextBlock } from "../core/narration";
 import type { ToolVerbs } from "../core/steps";
-import type { Attachment, CustomEntry, Reference, ToolEntry, Turn } from "../core/types";
+import type { Attachment, CustomEntry, PilotState, Reference, ToolEntry, Turn } from "../core/types";
 import type { UploadResult } from "./Composer";
 import type { MarkdownOptions, PilotIcon } from "./context";
 import type { PilotStrings } from "./strings";
@@ -56,7 +56,15 @@ export interface PluginMarkdown {
    * por su nombre. Uno a medio escribir llega con `complete: false`.
    */
   blocks?: Record<string, PluginView<{ block: TextBlock; turn: Turn; live: boolean }>>;
+  /**
+   * Cómo se pinta un elemento del markdown, por etiqueta (`a`, `code`, `img`…): p. ej. un enlace que
+   * es un CTA como botón. Recibe las props del elemento y `ctx`. Por etiqueta, gana el primer plugin.
+   */
+  components?: Record<string, ComponentType<Record<string, unknown> & { ctx: PluginCtx; children?: ReactNode }>>;
 }
+
+/** Un rechazo HTTP del servidor antes del stream (403 con `x-needs-login`, 429…). */
+export type PluginHttpError = NonNullable<PilotState["httpError"]>;
 
 export interface PilotoPlugin {
   /** Único: aparece en `data-plugin`, en los avisos y en `pilotDevtools()`. */
@@ -105,6 +113,10 @@ export interface PilotoPlugin {
     custom?: Record<string, PluginView<{ entry: CustomEntry; turn: Turn; live: boolean }>>;
     /** El texto del usuario como se pinta (se encadena en orden). */
     formatUserText?: (text: string) => string;
+    /** El texto que sale, antes de mandarlo (p. ej. anteponer lo señalado). Se encadena en orden. */
+    beforeSend?: (text: string, ctx: PluginCtx) => string;
+    /** El avatar del agente junto a cada respuesta. Gana el primer plugin. */
+    avatar?: PluginView<{ turn: Turn }>;
   };
 
   composer?: {
@@ -121,7 +133,18 @@ export interface PilotoPlugin {
       upload?: (file: File) => Promise<UploadResult>;
       transcribe?: (audio: Blob) => Promise<string>;
       voiceNoteText?: (transcript: string) => string;
+      /** Qué se puede adjuntar (como el `accept` de un input): `"image/*"` = sólo fotos. */
+      accept?: string;
+      /** Cuántos archivos a la vez (default 8). */
+      maxFiles?: number;
+      /** Tamaño máximo por archivo, en bytes (default 25 MB). */
+      maxBytes?: number;
     };
+    /**
+     * En lugar de la caja, cuando `when(ctx)` es verdad (p. ej. la prueba se acabó: 403 con
+     * `x-needs-login` → «Crea tu cuenta»). Gana el primer plugin cuyo `when` es verdad.
+     */
+    replace?: { when: (ctx: PluginCtx) => boolean; view: PluginView };
   };
 
   /** Arriba a la derecha, sobre el hilo. */
@@ -136,6 +159,8 @@ export interface PilotoPlugin {
   waiting?: PluginView<{ step: string | null; since: number }>;
   /** Envuelve TODO el chat (un proveedor: panel de artefactos, contexto propio). El primero va afuera. */
   wrap?: ComponentType<{ ctx: PluginCtx; children: ReactNode }>;
+  /** El servidor rechazó un mensaje antes de contestar (`ctx.pilot.state.httpError` también lo guarda). */
+  onHttpError?: (error: PluginHttpError, ctx: PluginCtx) => void;
   /** Este cliente mandó un turno. */
   onTurnStart?: (ctx: PluginCtx) => void;
   /** Terminó un turno de este cliente (abrir la última entrega, re-leer datos). */
@@ -162,6 +187,11 @@ export interface ResolvedPlugins {
   toolRenders: Record<string, Owned<NonNullable<NonNullable<PilotoPlugin["tools"]>["render"]>[string]>>;
   customRenders: Record<string, Owned<NonNullable<NonNullable<PilotoPlugin["message"]>["custom"]>[string]>>;
   blockRenders: Record<string, Owned<NonNullable<PluginMarkdown["blocks"]>[string]>>;
+  components: Record<string, Owned<NonNullable<PluginMarkdown["components"]>[string]>>;
+  avatar?: Owned<NonNullable<NonNullable<PilotoPlugin["message"]>["avatar"]>>;
+  beforeSend?: (text: string, ctx: PluginCtx) => string;
+  replacers: Owned<NonNullable<NonNullable<PilotoPlugin["composer"]>["replace"]>>[];
+  httpError: Owned<NonNullable<PilotoPlugin["onHttpError"]>>[];
   attachments: NonNullable<NonNullable<PilotoPlugin["composer"]>["attachments"]>;
   empty?: Owned<PluginView>;
   waiting?: Owned<NonNullable<PilotoPlugin["waiting"]>>;
@@ -214,6 +244,11 @@ export function pluginPoints(p: PilotoPlugin): string[] {
   add(p.message?.assistant, "message.assistant");
   for (const k of Object.keys(p.message?.custom ?? {})) out.push(`message.custom[${k}]`);
   add(p.message?.formatUserText, "message.formatUserText");
+  add(p.message?.beforeSend, "message.beforeSend");
+  add(p.message?.avatar, "message.avatar");
+  for (const k of Object.keys(p.markdown?.components ?? {})) out.push(`markdown.components[${k}]`);
+  add(p.composer?.replace, "composer.replace");
+  add(p.onHttpError, "onHttpError");
   add(p.composer?.actions, "composer.actions");
   add(p.composer?.actionsEnd, "composer.actionsEnd");
   add(p.composer?.above, "composer.above");
@@ -242,6 +277,9 @@ export function resolvePlugins(list: readonly PilotoPlugin[] = []): ResolvedPlug
     toolRenders: {},
     customRenders: {},
     blockRenders: {},
+    components: {},
+    replacers: [],
+    httpError: [],
     attachments: {},
     header: [],
     sidePanel: [],
@@ -264,6 +302,7 @@ export function resolvePlugins(list: readonly PilotoPlugin[] = []): ResolvedPlug
   const transforms: NonNullable<PluginMarkdown["transform"]>[] = [];
   const linkHandlers: NonNullable<MarkdownOptions["onLinkClick"]>[] = [];
   const formatters: ((t: string) => string)[] = [];
+  const beforeSends: ((t: string, ctx: PluginCtx) => string)[] = [];
   const names = new Set<string>();
   const first = <T,>(slot: Record<string, Owned<T>>, key: string, plugin: string, value: T, point: string) => {
     if (slot[key]) r.warnings.push(`«${plugin}» y «${slot[key].plugin}» dibujan ${point}[${key}]: gana «${slot[key].plugin}» (va antes).`);
@@ -285,13 +324,18 @@ export function resolvePlugins(list: readonly PilotoPlugin[] = []): ResolvedPlug
     for (const [k, v] of Object.entries(p.message?.custom ?? {})) first(r.customRenders, k, p.name, v, "message.custom");
     for (const [k, v] of Object.entries(p.markdown?.blocks ?? {})) first(r.blockRenders, k, p.name, v, "markdown.blocks");
     if (p.styles === "ghostykit") r.ghostykitStyled.add(p.name);
+    for (const [k, v] of Object.entries(p.markdown?.components ?? {})) first(r.components, k, p.name, v, "markdown.components");
+    if (p.message?.avatar) r.avatar ? r.warnings.push(`«${p.name}» también da message.avatar: gana «${r.avatar.plugin}».`) : (r.avatar = own(p.message.avatar));
+    if (p.message?.beforeSend) beforeSends.push(p.message.beforeSend);
+    if (p.composer?.replace) r.replacers.push(own(p.composer.replace));
+    if (p.onHttpError) r.httpError.push(own(p.onHttpError));
     if (p.composer?.actionsEnd) r.composerActionsEnd.push(own(p.composer.actionsEnd));
     if (p.composer?.below) r.composerBelow.push(own(p.composer.below));
     if (p.message?.assistantBefore) r.messageBefore.push(own(p.message.assistantBefore));
     if (p.wrap) r.wraps.push(own(p.wrap));
     if (p.onTurnStart) r.turnStart.push(own(p.onTurnStart));
     if (p.onTurnDone) r.turnDone.push(own(p.onTurnDone));
-    for (const key of ["upload", "transcribe", "voiceNoteText"] as const) {
+    for (const key of ["upload", "transcribe", "voiceNoteText", "accept", "maxFiles", "maxBytes"] as const) {
       const v = p.composer?.attachments?.[key];
       if (!v) continue;
       if (r.attachments[key]) r.warnings.push(`«${p.name}» también da composer.attachments.${key}: gana el primero.`);
@@ -317,6 +361,7 @@ export function resolvePlugins(list: readonly PilotoPlugin[] = []): ResolvedPlug
   }
   if (transforms.length) r.markdown.transform = (md, turn) => transforms.reduce((acc, f) => f(acc, turn), md);
   if (linkHandlers.length) r.markdown.onLinkClick = (href, ev) => linkHandlers.some((f) => f(href, ev));
+  if (beforeSends.length) r.beforeSend = (t, ctx) => beforeSends.reduce((acc, f) => f(acc, ctx), t);
   if (formatters.length) r.formatUserText = (t) => formatters.reduce((acc, f) => f(acc), t);
   return r;
 }

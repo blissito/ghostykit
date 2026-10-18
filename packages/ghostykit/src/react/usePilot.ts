@@ -297,7 +297,8 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
           commit({ ...ref.current, notice: err instanceof Error && err.message ? err.message : null, effects: [] });
           return runNow({ messages: [] }, true);
         }
-        commit(sendFailed(ref.current, err instanceof Error && err.message ? err.message : "No se pudo hablar con el agente."));
+        const failed = sendFailed(ref.current, err instanceof Error && err.message ? err.message : "No se pudo hablar con el agente.");
+        commit(err instanceof PilotHttpError ? { ...failed, httpError: { status: err.status, ...(err.code ? { code: err.code } : {}), message: err.message, ...(err.headers ? { headers: err.headers } : {}) } } : failed);
         return;
       }
       if (c.signal.aborted) return;

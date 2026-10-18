@@ -159,6 +159,8 @@ export interface PilotState {
   /** Cuándo empezó el turno que ESTE cliente encargó (0 = ninguno). */
   turnStartedAt: number;
   runId: string | null;
+  /** El último rechazo HTTP del servidor (antes del stream): para avisos propios (p. ej. 403 + `x-needs-login`). Se limpia al mandar. */
+  httpError?: { status: number; code?: string; message: string; headers?: Record<string, string> } | null;
   /** El estado compartido del agente (`STATE_SNAPSHOT`, con `STATE_DELTA` aplicado encima). */
   agentState: Record<string, unknown>;
   /** El paso con nombre en curso (`STEP_STARTED`), p. ej. `waking`. */

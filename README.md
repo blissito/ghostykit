@@ -106,7 +106,8 @@ ref.current?.send("Why did this fail?");                     // ask on the user'
 ```
 
 Other props: `features` (`attachments`, `retry`, `copy`, `usage`, `replyOptions`, `duration`,
-`steer`), `references` / `onReferencesChange`, `placeholder`, `avatar`, `initialTurns`, `loadOlder`
+`steer`, `narration`: `false` keeps the text written before each tool as part of the answer instead of
+checked progress lines), `references` / `onReferencesChange`, `placeholder`, `avatar`, `initialTurns`, `loadOlder`
 (earlier pages of a long thread), `forwardedProps` (extra keys for every run, e.g.
 `{permissions: "ask"}`), and the callbacks `onTurnStart`, `onTitle`, `onState`, `onEvent` (every raw
 AG-UI event), `onSend`. The agent's shared state (`STATE_SNAPSHOT` + `STATE_DELTA`) is
@@ -152,6 +153,7 @@ const PLUGINS = [crm, modelPicker({ onChange: (model) => api.setModel(model) }),
 | `strings` | Texts over the locale's. | `{ stop: "Para" }` |
 | `markdown.transform` | Rewrites the answer's markdown, with the turn at hand (chained). | `(md, turn) => md.replace(/#(\d+)/g, "[#$1](#folio-$1)")` |
 | `markdown.onLinkClick` | A click on a link; `true` if handled (asked in order). | open in-app |
+| `markdown.components` | How a markdown element is drawn, by tag (gets its props and `ctx`): e.g. a link that is a CTA as a button. | `{ a: ({ href, children, ctx }) => … }` |
 | `markdown.blocks` | Fenced blocks by name (```` ```eb-file ````) taken out of the text and drawn as cards under the answer; one still being written comes with `complete: false`. | `{ "eb-file": FileCard }` |
 | `vars`, `className` | Branding on the root: `--piloto-*` tokens and classes. | `{ "--piloto-radius-bubble": "6px" }` |
 | `tools.verbs` | How each tool is named in the steps. | `{ run_cron: { one, many, running } }` |
@@ -163,17 +165,21 @@ const PLUGINS = [crm, modelPicker({ onChange: (model) => api.setModel(model) }),
 | `message.assistantBefore` | Before each answer's text, under its steps. | live page progress, "Creating image…" |
 | `message.user` / `message.assistant` | Extras under each user message / answer. | `({ turn, live }) => …` |
 | `message.formatUserText` | How the user's text is shown (chained). | strip app plumbing |
+| `message.beforeSend` | Rewrites the text that goes out (chained). | prepend what was pointed at |
+| `message.avatar` | The agent's avatar next to each answer. | `() => <img src={logo} />` |
 | `composer.actions` | Buttons in the composer bar, between the image button and the clip. | "My files", "Point" |
 | `composer.actionsEnd` | Buttons after the clip. | model picker |
 | `composer.above` | Above the message box. | `<Subagents pilot={ctx.pilot} />` |
 | `composer.below` | Under the message box. | suggestion chips |
-| `composer.attachments` | `upload`, `transcribe`, `voiceNoteText`. | `{ upload: async (f) => ({ url }) }` |
+| `composer.attachments` | `upload`, `transcribe`, `voiceNoteText`, and the limits `accept`, `maxFiles`, `maxBytes`. A voice note keeps its audio attached when there is `upload`. | `{ upload, accept: "image/*", maxFiles: 4, maxBytes: 4_000_000 }` |
+| `composer.replace` | `{ when(ctx), view }`: drawn instead of the message box while `when` is true. | trial over (403 + `x-needs-login`) → "Create your account" |
 | `header` | Top right, over the thread. | share button |
 | `sidePanel` | Next to the chat. | live page, subagents |
 | `aboveThread` | Above the messages. | a banner |
 | `empty` | The empty thread (instead of the greeting). | onboarding |
 | `waiting` | While the agent hasn't answered (instead of the waiting phrase). Gets `step`, `since`. | "Creating your image…" |
 | `wrap` | A provider around the whole chat (`{ctx, children}`); the first plugin is outermost. | artifacts panel |
+| `onHttpError` | The server refused a message before answering (`{status, code, message, headers}`; also in `pilot.state.httpError` until the next send). | 429 → upgrade banner |
 | `onTurnStart` / `onTurnDone` | This client started / finished a turn. | open the last delivery |
 
 Every view gets `ctx`: `{pilot, agentState, strings, send, addReference, addAttachments, setDraft, focus, plugins}`.
@@ -186,9 +192,9 @@ in the URL).
 
 **Order and precedence**, in the order of the `plugins` list:
 
-- **Maps** (`strings`, `tools.verbs`, `tools.icons`, `vars`) are merged, and later plugins win. `markdown` and `formatUserText` are chained.
+- **Maps** (`strings`, `tools.verbs`, `tools.icons`, `vars`) are merged, and later plugins win. `markdown.transform`, `formatUserText` and `beforeSend` are chained.
 - **`events` and `state`** call every handler, in order.
-- **Keyed or single views** (`tools.render`, `message.custom`, `markdown.blocks`, `empty`, `waiting`, `composer.attachments`): the first plugin that declares one wins. A clash is a development warning.
+- **Keyed or single views** (`tools.render`, `message.custom`, `markdown.blocks`, `markdown.components`, `message.avatar`, `empty`, `waiting`, `composer.attachments`, `composer.replace`): the first plugin that declares one wins. A clash is a development warning.
 - **Lists** (`header`, `sidePanel`, `aboveThread`, `composer.actions`/`actionsEnd`/`above`/`below`, `message.user`/`assistant`/`assistantBefore`, `wrap`, `onTurnStart`/`onTurnDone`) all apply, in order.
 
 In development, ghostykit also warns once about a `CUSTOM` event that nothing handles.

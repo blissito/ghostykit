@@ -204,21 +204,41 @@ export interface AgentBubbleProps {
   renderTools?: (turn: Turn, live: boolean) => ReactNode;
   /** Antes del texto de la respuesta, bajo sus pasos. */
   renderBefore?: (turn: Turn, live: boolean) => ReactNode;
+  /** `false`: el texto antes de cada herramienta NO se vuelve paso con palomita (todo es respuesta). */
+  narration?: boolean;
+  /** El avatar del agente a la izquierda de la respuesta. */
+  avatar?: ReactNode;
   /** Bloques con nombre (```eb-file```) que salen del texto y se pintan como tarjetas bajo la respuesta. */
   blocks?: { langs: string[]; render: (blocks: TextBlock[], turn: Turn, live: boolean) => ReactNode };
 }
 
-export function AgentBubble({ turn, live, onRetry, onOption, showUsage = true, showCopy = true, showDuration = true, renderDeliveries, renderTools, renderBefore, blocks }: AgentBubbleProps) {
+export function AgentBubble(props: AgentBubbleProps) {
+  const { turn, avatar } = props;
+  const body = <AgentBody {...props} showUsage={props.showUsage ?? true} showCopy={props.showCopy ?? true} showDuration={props.showDuration ?? true} />;
+  return (
+    <TurnContext.Provider value={turn}>
+    {avatar ? (
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 shrink-0">{avatar}</div>
+        {body}
+      </div>
+    ) : (
+      body
+    )}
+    </TurnContext.Provider>
+  );
+}
+
+function AgentBody({ turn, live, onRetry, onOption, showUsage, showCopy, showDuration, renderDeliveries, renderTools, renderBefore, blocks, narration = true }: AgentBubbleProps) {
   const { strings: t } = usePiloto();
   const extracted = blocks ? extractBlocks(turn.text ?? "", blocks.langs, turn.cuts) : { text: turn.text ?? "", cuts: turn.cuts, blocks: [] };
   // Cerrado y sin pasos esperando aprobación: si acabó en un paso, lo último que dijo es la respuesta.
   const closed = !live && !turn.tools?.some((x) => x.status === "pending");
-  const narrated = splitNarration(extracted.text, extracted.cuts, closed);
+  const narrated = narration ? splitNarration(extracted.text, extracted.cuts, closed) : { steps: [] as string[], rest: extracted.text };
   const visible = narrated.rest;
   // «Si quieres, puedo: …» al final de la última respuesta → botones.
   const options = onOption && !live && visible ? extractReplyOptions(visible) : null;
   return (
-    <TurnContext.Provider value={turn}>
     <div className="gc-msg-agent min-w-0 max-w-[90%]">
       {turn.thought && (
         <details className="mb-3 text-xs text-text-secondary">
@@ -245,6 +265,5 @@ export function AgentBubble({ turn, live, onRetry, onOption, showUsage = true, s
       {showUsage && turn.usage && <UsageStats {...turn.usage} />}
       {turn.text && !live && <TurnFooter text={turn.text} seconds={turn.seconds} onRetry={onRetry} showCopy={showCopy} showDuration={showDuration} />}
     </div>
-    </TurnContext.Provider>
   );
 }

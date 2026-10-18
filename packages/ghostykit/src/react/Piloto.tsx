@@ -51,6 +51,11 @@ export interface PilotoFeatures {
   duration?: boolean;
   /** Mandar con el run vivo (steer). Default: lo que diga el agente en `state.caps.steer`. */
   steer?: boolean;
+  /**
+   * Lo que el agente dice ANTES de cada herramienta como pasos con palomita («Reviso tus crons.»).
+   * Default: sí. `false`: todo el texto es respuesta (los pasos siguen en su caja).
+   */
+  narration?: boolean;
 }
 
 export interface PilotoProps extends UsePilotOptions {
@@ -109,6 +114,23 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
   useEffect(() => {
     if (isDev()) for (const w of plugins.warnings) warnOnce(w);
   }, [plugins]);
+  // Los componentes de markdown de los plugins, con su `ctx` (leído al pintar: no se recrean).
+  const ctxForComponents = useRef<PluginCtx | null>(null);
+  const boundComponents = useMemo(() => {
+    const entries = Object.entries(plugins.components);
+    if (!entries.length) return undefined;
+    return Object.fromEntries(
+      entries.map(([tag, { plugin, value: C }]) => [
+        tag,
+        // Como toda vista de plugin: marcada con su nombre y, si es de la app, aislada de las utilidades.
+        (p: Record<string, unknown>) => (
+          <span {...pluginAttrs(plugin, plugins.ghostykitStyled)} style={{ display: "contents" }}>
+            <C {...p} ctx={ctxForComponents.current!} />
+          </span>
+        ),
+      ]),
+    );
+  }, [plugins]);
   const strings = useMemo<PilotStrings>(() => ({ ...(locale === "en" ? STRINGS_EN : STRINGS_ES), ...plugins.strings }), [locale, plugins]);
   const config = useMemo<PilotoConfig>(
     () => ({
@@ -118,9 +140,9 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
       formatUserText: plugins.formatUserText ? (x: string) => plugins.formatUserText!(cleanUserText(x)) : cleanUserText,
       theme,
       skin: props.skin ?? "ghosty",
-      markdown: plugins.markdown,
+      markdown: { ...plugins.markdown, ...(boundComponents ? { components: boundComponents } : {}) },
     }),
-    [strings, locale, plugins, theme, props.skin],
+    [strings, locale, plugins, theme, props.skin, boundComponents],
   );
   const t = strings;
 
@@ -164,12 +186,17 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
   const send = useCallback(
     (text: string, attachments: Attachment[] = []) => {
       const current = refsRef.current;
-      const full = applyReferences(text, current);
+      const before = pluginsRef.current.beforeSend;
+      const full = applyReferences(before && ctxRef.current ? before(text, ctxRef.current) : text, current);
       if (current.length) setRefs([]);
       void pilot.send(full, attachments, current.length ? { references: current } : {});
     },
     [pilot, setRefs],
   );
+
+  const pluginsRef = useRef(plugins);
+  pluginsRef.current = plugins;
+  const ctxRef = useRef<PluginCtx>(null as unknown as PluginCtx);
 
   // ── Lo que se puede hacer desde afuera: el `ref` de <Piloto> y el `ctx` de los plugins ───────
   const composerHandle = useRef<ComposerHandle>(null);
@@ -189,10 +216,10 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
 
   // ── Plugins: el contexto que reciben, sus eventos y su estado ──────────────────
   const ctx: PluginCtx = { ...actions, agentState: state.agentState, strings, plugins: plugins.list };
-  const ctxRef = useRef(ctx);
+  ctxForComponents.current = ctx;
+  /** Los atributos del envoltorio de lo que dibuja un plugin: su nombre y, si es de la app, el aislamiento. */
+  const mark = (plugin: string) => pluginAttrs(plugin, plugins.ghostykitStyled);
   ctxRef.current = ctx;
-  const pluginsRef = useRef(plugins);
-  pluginsRef.current = plugins;
   const unattended = useRef(new Set<string>());
   useEffect(
     () =>
@@ -252,6 +279,19 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
       }),
     [pilot.onTurn],
   );
+
+  // Un rechazo HTTP nuevo (403 de prueba agotada, 429…) se avisa a los plugins que lo atienden.
+  useEffect(() => {
+    const err = state.httpError;
+    if (!err) return;
+    for (const h of pluginsRef.current.httpError) {
+      try {
+        h.value(err, ctxRef.current);
+      } catch (e) {
+        console.error(`[ghostykit] el plugin «${h.plugin}» falló con onHttpError`, e);
+      }
+    }
+  }, [state.httpError]);
 
   // Una tarjeta contestada se queda a la vista mientras cae su sello (el run que la contesta puede
   // traer un snapshot que ya no la incluye).
@@ -387,7 +427,7 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
   const toolRunning = busy && last?.role === "assistant" && (last.tools ?? []).some(isRunning);
   const empty = turns.length === 0 && !busy;
   const placeholder = props.placeholder ?? (props.agentName ? t.placeholder(props.agentName) : t.placeholderDefault);
-  const { upload, transcribe, voiceNoteText } = plugins.attachments;
+  const { upload, transcribe, voiceNoteText, accept, maxFiles, maxBytes } = plugins.attachments;
   const showFiles = features.attachments ?? Boolean(upload);
 
   // Lo señalado (referencias con `prompt`) va ARRIBA de la caja, como el chip de «Señalar» de Ghosty;
@@ -395,7 +435,20 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
   const pointedRefs = refs.filter((r) => r.prompt);
   const plainRefs = refs.filter((r) => !r.prompt);
   const removeRef = (id: string) => setRefs(refsRef.current.filter((r) => r.id !== id));
-  const composer = (
+  // `composer.replace`: el primer plugin cuyo `when` es verdad dibuja en lugar de la caja.
+  const replacer = plugins.replacers.find((r) => {
+    try {
+      return r.value.when(ctx);
+    } catch {
+      return false;
+    }
+  });
+  const Replacement = replacer?.value.view;
+  const composer = Replacement ? (
+    <div {...mark(replacer!.plugin)}>
+      <Replacement ctx={ctx} />
+    </div>
+  ) : (
     <div ref={composerBox}>
       <ReferenceChips references={pointedRefs} onRemove={removeRef} onActivate={props.onReferenceClick} />
       <Composer
@@ -416,6 +469,9 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
         extras={plugins.composerActions.length ? <Views items={plugins.composerActions} ctx={ctx} styled={plugins.ghostykitStyled} inline /> : undefined}
         extrasEnd={plugins.composerActionsEnd.length ? <Views items={plugins.composerActionsEnd} ctx={ctx} styled={plugins.ghostykitStyled} inline /> : undefined}
         handleRef={composerHandle}
+        accept={accept}
+        {...(maxFiles ? { maxFiles } : {})}
+        {...(maxBytes ? { maxFileMb: maxBytes / (1024 * 1024) } : {})}
       />
     </div>
   );
@@ -434,8 +490,7 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
   const aboveComposer = plugins.composerAbove.length ? <Views items={plugins.composerAbove} ctx={ctx} styled={plugins.ghostykitStyled} /> : null;
   const belowComposer = plugins.composerBelow.length ? <Views items={plugins.composerBelow} ctx={ctx} styled={plugins.ghostykitStyled} /> : null;
   const header = plugins.header.length ? <Views items={plugins.header} ctx={ctx} styled={plugins.ghostykitStyled} inline /> : null;
-  /** Los atributos del envoltorio de lo que dibuja un plugin: su nombre y, si es de la app, el aislamiento. */
-  const mark = (plugin: string) => pluginAttrs(plugin, plugins.ghostykitStyled);
+
   const Empty = plugins.empty?.value;
   const Waiting = plugins.waiting?.value;
 
@@ -618,6 +673,14 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
                           renderTools={renderTools}
                           renderBefore={renderBefore}
                           blocks={blocks}
+                          narration={features.narration !== false}
+                          avatar={
+                            plugins.avatar ? (
+                              <span {...mark(plugins.avatar.plugin)}>
+                                <plugins.avatar.value ctx={ctx} turn={turn} />
+                              </span>
+                            ) : undefined
+                          }
                         />
                       )}
                       {turn.role === "assistant" && <TurnNotes turn={turn} />}
