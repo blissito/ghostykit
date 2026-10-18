@@ -1,6 +1,6 @@
 name: Publish ghostykit
 
-# Subir `version` en packages/ghostykit/package.json y hacer merge a main ES publicar. Sin tokens:
+# Subir `version` en packages/ghostykit/package.json y luego publicar con el tag `vX.Y.Z` (o a mano). Sin tokens:
 # npm Trusted Publishing (OIDC) confía en ESTE workflow (npmjs.com → ghostykit → Settings → Trusted
 # Publisher: blissito/ghostykit, publish.yml). Se publica SÓLO si la versión no está en npm: un
 # re-run salta limpio; un error real falla.
@@ -8,10 +8,11 @@ name: Publish ghostykit
 # ⚠️ La PRIMERA publicación la hace el dueño a mano (`npm publish` desde packages/ghostykit): npm no
 # deja configurar el Trusted Publisher de un paquete que todavía no existe.
 
+# Publicar es una DECISIÓN, no un efecto de cada push: sólo a mano (Actions → Run workflow) o al
+# subir un tag `v*` (p. ej. `git tag v0.3.0 && git push origin v0.3.0`).
 on:
   push:
-    branches: [main]
-    paths: ["packages/ghostykit/**"]
+    tags: ["v*"]
   workflow_dispatch:
 
 # OIDC: GitHub emite el token de identidad que npm canjea por permiso de publicar.
