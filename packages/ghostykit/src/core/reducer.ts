@@ -27,8 +27,9 @@ export function createPilotState(turns: Turn[] = []): PilotState {
   };
 }
 
-/** Los `CUSTOM` que son fontanería del protocolo, no contenido del turno. */
-const PROTOCOL_CUSTOM = new Set(["ghosty.title", "ghosty.injected", "ghosty.history", "ghosty.tool"]);
+/** Los `CUSTOM` que no se guardan en el turno: fontanería del protocolo, o flujos que la app lee
+ *  por `onEvent` (`ghosty.page`: los eventos del constructor, muchos por run). */
+const NOT_IN_TURN = new Set(["ghosty.title", "ghosty.injected", "ghosty.history", "ghosty.tool", "ghosty.replace", "ghosty.page"]);
 
 type Ev = { type: string; [k: string]: any };
 
@@ -137,8 +138,8 @@ export function messagesToTurns(messages: Message[]): Turn[] {
     } else if (m.role === "assistant") {
       const t = assistant();
       if (!t.id && m.id) t.id = m.id;
-      // Lo que el turno entregó (`CUSTOM ghosty.delivery`…) viaja en el campo `custom` del mensaje.
-      const custom = (m as { custom?: CustomEntry[] }).custom;
+      // Lo que el turno entregó (`CUSTOM ghosty.delivery`…) viaja en `metadata.custom` del mensaje.
+      const custom = (m as { metadata?: { custom?: CustomEntry[] } }).metadata?.custom;
       if (Array.isArray(custom) && custom.length) t.custom = [...(t.custom ?? []), ...custom.filter((c) => c && typeof c.name === "string")];
       const text = m.content ?? "";
       if (text) t.text = t.text ? `${t.text}\n\n${text}` : text;
@@ -280,7 +281,18 @@ export function reduceAgUiEvent(prev: PilotState, e: Ev, now: number = Date.now(
         if (str(v.detail)) patch.detail = str(v.detail);
         return upsertTool(s, v.toolCallId, patch);
       }
-      if (typeof e.name !== "string" || PROTOCOL_CUSTOM.has(e.name)) return s;
+      if (e.name === "ghosty.replace") {
+        // El servidor corrigió la respuesta (guardia, compactación): cambia el texto final del turno,
+        // lo de después del último paso; la narración de antes se queda.
+        const content = (e.value as { content?: unknown } | undefined)?.content;
+        if (typeof content !== "string") return s;
+        return patchAssistant(s, (t) => {
+          const cut = t.cuts?.length ? t.cuts[t.cuts.length - 1] : 0;
+          const head = t.text.slice(0, cut);
+          return { ...t, text: head.trim() ? `${head}\n\n${content}` : content };
+        });
+      }
+      if (typeof e.name !== "string" || NOT_IN_TURN.has(e.name)) return s;
       return patchAssistant(s, (t) => ({ ...t, custom: [...(t.custom ?? []), { name: e.name, value: e.value, ...(typeof e.timestamp === "number" ? { timestamp: e.timestamp } : {}) }] }));
     default:
       // ACTIVITY_*, RAW…: no se pintan (la app los ve por `onEvent`).
@@ -311,13 +323,15 @@ function finish(s0: PilotState, e: Ev, now: number, failed = false): PilotState 
       s = { ...s, turns: s.turns.map((t) => (t.tools?.some((x) => waiting.has(x.id)) ? { ...t, tools: t.tools.map((x) => (waiting.has(x.id) && x.status !== "completed" ? { ...x, status: "pending" } : x)) } : t)) };
     }
   }
-  // Uso de tokens (`usage: TokenUsage[]`) en el último turno.
-  const usage = Array.isArray(e.usage) && e.usage.length
+  // Uso de tokens (`usage: TokenUsage[]`) y costo (`metadata.costUsd`) en el último turno.
+  const costUsd = typeof e.metadata?.costUsd === "number" ? (e.metadata.costUsd as number) : undefined;
+  const tokens = Array.isArray(e.usage) && e.usage.length
     ? (e.usage as { inputTokens?: number; outputTokens?: number; totalTokens?: number }[]).reduce(
         (a, u) => ({ ...a, used: a.used + (u.totalTokens ?? (u.inputTokens ?? 0) + (u.outputTokens ?? 0)), input: (a.input ?? 0) + (u.inputTokens ?? 0), output: (a.output ?? 0) + (u.outputTokens ?? 0) }),
         { used: 0, size: 0, cost: 0 } as NonNullable<PilotState["usage"]>,
       )
     : null;
+  const usage = tokens || costUsd !== undefined ? { ...(tokens ?? { used: 0, size: 0, cost: 0 }), ...(costUsd !== undefined ? { cost: costUsd } : {}) } : null;
   const t0 = s.turnStartedAt;
   const seconds = t0 ? Math.max(1, Math.round((now - t0) / 1000)) : undefined;
   const turns = [...s.turns];

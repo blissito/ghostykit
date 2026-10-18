@@ -97,7 +97,7 @@ How each one shows up in the chat:
 | `STEP_STARTED` / `STEP_FINISHED` | Optional. While nothing else is on screen, a step whose `stepName` the app has a label for (`strings.steps`, built in: `waking`, `session`, `compacting`) replaces the waiting phrase. Other names are not drawn, so framework node names never leak into the chat. |
 | `STATE_SNAPSHOT` / `STATE_DELTA` | Optional. The agent's shared state, given to the app as `pilot.state.agentState` (`STATE_DELTA` is an RFC 6902 JSON Patch over the last snapshot; a patch that doesn't apply is ignored until the next snapshot). One key has meaning for the client: `caps.steer: true` turns on steer (§6). |
 | `CUSTOM` | Kept in the turn as `turn.custom[]` (`{name, value, timestamp}`) for the app to draw (`renderDeliveries`), except the protocol ones in §7. |
-| `RUN_FINISHED` `usage` | Optional: tokens/cost under the answer (`[{model, inputTokens, outputTokens}]`). |
+| `RUN_FINISHED` `usage` | Optional: tokens under the answer (`TokenUsage[]`: `[{model, inputTokens, outputTokens}]`). The cost, in USD, goes in `metadata.costUsd`. |
 | `RUN_ERROR` `{message, code?}` | The run ends here, with the message shown in red. Do **not** send `RUN_FINISHED` after it. |
 
 `TEXT_MESSAGE_CHUNK` and `TOOL_CALL_CHUNK` (the compact forms) are accepted too.
@@ -187,7 +187,7 @@ then ONE of:
 
 `MESSAGES_SNAPSHOT` uses AG-UI messages:
 `{id, role: "user", content}`,
-`{id, role: "assistant", content?, toolCalls?: [{id, type: "function", function: {name, arguments}}], custom?: [{name, value}]}`,
+`{id, role: "assistant", content?, toolCalls?: [{id, type: "function", function: {name, arguments}}], metadata?: {custom?: [{name, value}]}}`,
 `{id, role: "tool", toolCallId, content, error?}`. The client rebuilds the bubbles and steps from it.
 There is no event replay and no `Last-Event-ID`: the snapshot is the source of truth. Message ids
 must be stable (the client uses them to join history pages).
@@ -199,11 +199,11 @@ must be stable (the client uses them to join history pages).
 - **A live run is part of the snapshot.** It includes what the live run has said so far; the events
   that follow continue from there.
 - **What a turn delivered** (files, artifacts: the `CUSTOM` events of §7 that the app draws) goes
-  in the `custom` field of that assistant message, so it is still there after a reload. AG-UI
-  messages allow extra fields.
-- **A snapshot may also arrive in the middle of a run**, for example when the backend rewrites text it
-  already sent (a guard, a compaction). The client replaces the thread and keeps the run going: same
-  `runId`, still busy, tool calls without a result still running.
+  in `metadata.custom` of that assistant message, so it is still there after a reload. (`metadata`
+  is AG-UI's open field on messages; a top-level extra field could be dropped by a validator.)
+- **A snapshot may also arrive in the middle of a run.** The client replaces the thread and keeps the
+  run going: same `runId`, still busy, tool calls without a result still running. To rewrite only the
+  answer's text (a guard, a compaction), `CUSTOM ghosty.replace` (§7) is lighter.
 
 ### Long threads (optional)
 
@@ -264,8 +264,8 @@ A later snapshot keeps the loaded pages when it starts at a message the client a
 
 ## 7. Custom events
 
-All optional. Names starting with `ghosty.` are reserved for this list. The first four are part of
-the protocol; the client handles them and doesn't keep them in the turn. The rest are content: they
+All optional. Names starting with `ghosty.` are reserved for this list. The first five are part of
+the protocol, and the client handles them; they and `ghosty.page` are not kept in the turn. The rest are content: they
 go to `turn.custom[]` for the app to draw, and every event also reaches the app through `onEvent`.
 
 | `CUSTOM` name | `value` | Meaning |
@@ -273,8 +273,10 @@ go to `turn.custom[]` for the app to draw, and every event also reaches the app 
 | `ghosty.title` | `{ "title": "Monitor timeouts" }` | The backend named the thread (for a sidebar). |
 | `ghosty.history` | `{ "hasMoreBefore": true, "before": "<cursor>" }` | Sent right before `MESSAGES_SNAPSHOT`: there are older messages (§5). |
 | `ghosty.injected` | `{ "messageId": "msg_07" }` | A steer message entered the live run (§6). |
+| `ghosty.replace` | `{ "messageId"?, "content": "…" }` | The backend rewrote the answer (a guard, a compaction): `content` replaces the turn's final text, after its last step; the narration before stays. |
 | `ghosty.tool` | `{ "toolCallId", "title", "kind", "path"?, "detail"? }` | The localized label of a step, sent after its `TOOL_CALL_START`. `title` wins over the app's `toolVerbs`; `kind` picks the icon. |
-| `ghosty.delivery` | `{ "id", "messageId", "url", "tipo", "nombre", "fileId", "mime", "size", "captura" }` | The turn delivered a file or artifact. **A URL, never base64.** Also stored in the message's `custom` (§5), including the pages `loadOlder` returns. |
+| `ghosty.delivery` | `{ "id", "messageId", "url", "tipo", "nombre", "fileId", "mime", "size", "captura" }` | The turn delivered a file or artifact. **A URL, never base64.** Also stored in the message's `metadata.custom` (§5), including the pages `loadOlder` returns. |
+| `ghosty.page` | `{ "event": "…", … }` | A page-builder event (landings). Read by the app through `onEvent`; not kept in the turn. |
 | `ghosty.ui` | `{ "action": "…", … }` | The agent asks the app to do something on screen (move or open a card). |
 | `ghosty.reply_to` | `{ "messageId": "…" }` | The answer replies to a specific earlier message. |
 | `ghosty.attachments_failed` | `{ "names": ["…"] }` | Attachments of the user's message the agent couldn't read. |
@@ -290,7 +292,7 @@ go to `turn.custom[]` for the app to draw, and every event also reaches the app 
    interrupt, or success.
 5. A closed connection never stops a run; `forwardedProps.cancel` does. `409`/`429`/`503` as in §6.
 6. Optional: `STATE_SNAPSHOT`/`STATE_DELTA` with `caps`, steer with `forwardedProps.steer`,
-   `ghosty.history` for long threads, and deliveries in `custom`.
+   `ghosty.history` for long threads, and deliveries in `metadata.custom`.
 
 Reference: an agent written with LangGraph and served through its official AG-UI adapter
 (`@ag-ui/langgraph`) is in [`examples/langgraph`](../examples/langgraph).

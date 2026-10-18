@@ -59,13 +59,13 @@ describe("reductor 0.5.0", () => {
     expect(s.turns[1].custom).toEqual([{ name: "ghosty.delivery", value: { tipo: "archivo", nombre: "cotizacion.pdf", url: "https://x/c.pdf" }, timestamp: 5 }]);
   });
 
-  it("al reconstruir desde snapshot, las entregas salen del campo `custom` del mensaje", () => {
+  it("al reconstruir desde snapshot, las entregas salen de `metadata.custom` del mensaje", () => {
     const s = run(createPilotState(), [
       {
         type: "MESSAGES_SNAPSHOT",
         messages: [
           { id: "u1", role: "user", content: "hazme el pdf" },
-          { id: "a1", role: "assistant", content: "Listo.", custom: [{ name: "ghosty.delivery", value: { url: "https://x/c.pdf" } }] },
+          { id: "a1", role: "assistant", content: "Listo.", metadata: { custom: [{ name: "ghosty.delivery", value: { url: "https://x/c.pdf" } }] } },
         ],
       },
     ]);
@@ -340,5 +340,41 @@ describe("ghosty.tool", () => {
     expect(tool).toMatchObject({ title: "Read", label: "Leyendo cotizacion.pdf", kind: "read", path: "/w/cotizacion.pdf", status: "in_progress" });
     expect(stepLabel(tool, { Read: { one: "Leyó", many: "Leyó %n", running: "Leyendo…" } })).toBe("Leyendo cotizacion.pdf");
     expect(s.turns[0].custom).toBeUndefined();
+  });
+});
+
+describe("ghosty.replace, ghosty.page y costUsd", () => {
+  it("ghosty.replace cambia el texto final del turno y deja la narración", async () => {
+    const { splitNarration } = await import("../src/core");
+    const s = run(beginSend(createPilotState(), "hola", [], 1), [
+      { type: "RUN_STARTED", runId: "r" },
+      { type: "TEXT_MESSAGE_CONTENT", messageId: "a", delta: "Reviso tus crons." },
+      { type: "TOOL_CALL_START", toolCallId: "t1", toolCallName: "list_crons" },
+      { type: "TOOL_CALL_RESULT", toolCallId: "t1", messageId: "x", content: "[]" },
+      { type: "TEXT_MESSAGE_CONTENT", messageId: "b", delta: "Texto con un dato sensible." },
+      { type: "CUSTOM", name: "ghosty.replace", value: { messageId: "b", content: "Texto corregido." } },
+    ]);
+    const t = s.turns[1];
+    expect(splitNarration(t.text, t.cuts)).toEqual({ steps: ["Reviso tus crons."], rest: "Texto corregido." });
+    expect(t.custom).toBeUndefined();
+    const plain = run(beginSend(createPilotState(), "hola", [], 1), [
+      { type: "TEXT_MESSAGE_CONTENT", messageId: "a", delta: "Mal." },
+      { type: "CUSTOM", name: "ghosty.replace", value: { content: "Bien." } },
+    ]);
+    expect(plain.turns[1].text).toBe("Bien.");
+  });
+
+  it("ghosty.page no se guarda en el turno (la app lo lee por onEvent)", () => {
+    const s = run(beginSend(createPilotState(), "hola", [], 1), [{ type: "CUSTOM", name: "ghosty.page", value: { event: "section", id: "hero" } }]);
+    expect(s.turns).toHaveLength(1);
+  });
+
+  it("RUN_FINISHED.metadata.costUsd es el costo del turno", () => {
+    const s = run(beginSend(createPilotState(), "hola", [], 1), [
+      { type: "RUN_STARTED", runId: "r" },
+      { type: "TEXT_MESSAGE_CONTENT", messageId: "a", delta: "ok" },
+      { type: "RUN_FINISHED", outcome: { type: "success" }, usage: [{ model: "m", inputTokens: 100, outputTokens: 20 }], metadata: { costUsd: 0.0123 } },
+    ]);
+    expect(s.turns[1].usage).toMatchObject({ used: 120, input: 100, output: 20, cost: 0.0123 });
   });
 });
