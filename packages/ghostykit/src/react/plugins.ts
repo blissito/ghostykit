@@ -147,8 +147,11 @@ export interface PilotoPlugin {
     replace?: { when: (ctx: PluginCtx) => boolean; view: PluginView };
   };
 
-  /** Arriba a la derecha, sobre el hilo. */
-  header?: PluginView;
+  /**
+   * La barra de arriba, sobre el hilo. Una vista sola va a la DERECHA (acciones); con
+   * `{ start, end }`, `start` va a la izquierda (avatar y nombre del agente) y `end` a la derecha.
+   */
+  header?: PluginView | PluginHeader;
   /** Junto al chat. */
   sidePanel?: PluginView;
   /** Arriba de los mensajes, dentro del hilo. */
@@ -165,6 +168,19 @@ export interface PilotoPlugin {
   onTurnStart?: (ctx: PluginCtx) => void;
   /** Terminó un turno de este cliente (abrir la última entrega, re-leer datos). */
   onTurnDone?: (info: TurnDoneInfo, ctx: PluginCtx) => void;
+}
+
+/** Los dos lados de la barra de arriba. */
+export interface PluginHeader {
+  /** A la izquierda: quién es (avatar, nombre). */
+  start?: PluginView;
+  /** A la derecha: acciones (nueva conversación, cerrar). */
+  end?: PluginView;
+}
+
+/** ¿Es una vista (componente de función, `memo`, `forwardRef`) y no `{ start, end }`? */
+function isView(x: PluginView | PluginHeader): x is PluginView {
+  return typeof x === "function" || (typeof x === "object" && x !== null && "$$typeof" in x);
 }
 
 /** Ayuda de tipos: `definePlugin({ name: "crm", … })`. */
@@ -195,7 +211,10 @@ export interface ResolvedPlugins {
   attachments: NonNullable<NonNullable<PilotoPlugin["composer"]>["attachments"]>;
   empty?: Owned<PluginView>;
   waiting?: Owned<NonNullable<PilotoPlugin["waiting"]>>;
+  /** La barra de arriba, a la derecha (`header` o `header.end`). */
   header: Owned<PluginView>[];
+  /** La barra de arriba, a la izquierda (`header.start`). */
+  headerStart: Owned<PluginView>[];
   sidePanel: Owned<PluginView>[];
   aboveThread: Owned<PluginView>[];
   composerActions: Owned<PluginView>[];
@@ -254,7 +273,13 @@ export function pluginPoints(p: PilotoPlugin): string[] {
   add(p.composer?.above, "composer.above");
   add(p.composer?.below, "composer.below");
   add(p.composer?.attachments, "composer.attachments");
-  add(p.header, "header");
+  if (p.header) {
+    if (isView(p.header)) out.push("header");
+    else {
+      add(p.header.start, "header.start");
+      add(p.header.end, "header.end");
+    }
+  }
   add(p.sidePanel, "sidePanel");
   add(p.aboveThread, "aboveThread");
   add(p.empty, "empty");
@@ -282,6 +307,7 @@ export function resolvePlugins(list: readonly PilotoPlugin[] = []): ResolvedPlug
     httpError: [],
     attachments: {},
     header: [],
+    headerStart: [],
     sidePanel: [],
     aboveThread: [],
     composerActions: [],
@@ -343,7 +369,13 @@ export function resolvePlugins(list: readonly PilotoPlugin[] = []): ResolvedPlug
     }
     if (p.empty) r.empty ? r.warnings.push(`«${p.name}» también dibuja empty: gana «${r.empty.plugin}».`) : (r.empty = own(p.empty));
     if (p.waiting) r.waiting ? r.warnings.push(`«${p.name}» también dibuja waiting: gana «${r.waiting.plugin}».`) : (r.waiting = own(p.waiting));
-    if (p.header) r.header.push(own(p.header));
+    if (p.header) {
+      if (isView(p.header)) r.header.push(own(p.header));
+      else {
+        if (p.header.start) r.headerStart.push(own(p.header.start));
+        if (p.header.end) r.header.push(own(p.header.end));
+      }
+    }
     if (p.sidePanel) r.sidePanel.push(own(p.sidePanel));
     if (p.aboveThread) r.aboveThread.push(own(p.aboveThread));
     if (p.composer?.actions) r.composerActions.push(own(p.composer.actions));

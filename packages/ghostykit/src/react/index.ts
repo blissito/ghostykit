@@ -8,6 +8,7 @@ export {
   type PilotoPlugin,
   type PluginCtx,
   type PluginEvent,
+  type PluginHeader,
   type PluginView,
   type ResolvedPlugins,
 } from "./plugins";
@@ -17,7 +18,7 @@ export { AgentSteps, ArcadeIcon, ClawIcon, DEFAULT_TOOL_ICONS, Narration, RobotA
 export { LinkSafetyModal, Markdown } from "./Markdown";
 export { InlineMarkdown, renderInline } from "./InlineMarkdown";
 export { useTextAtPace } from "./TextAtPace";
-export { Composer, ModelPicker, mimeOf, type ComposerHandle, type ComposerProps, type ModelOption, type UploadResult } from "./Composer";
+export { Composer, ModelPicker, mimeOf, type ComposerHandle, type ComposerIcons, type ComposerProps, type ModelOption, type UploadResult } from "./Composer";
 export { ConfirmCard, DecisionLines } from "./ConfirmCard";
 export { ReferenceChips, Suggestions } from "./Chips";
 export { TypingDots, WaitLabel } from "./Status";

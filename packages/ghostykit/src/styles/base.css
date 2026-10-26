@@ -7,7 +7,7 @@
    `.gs-prosa`, la garra, los puntitos), (3) el blindaje contra el CSS de la app
    anfitriona y (4) la pieza nueva: el pase de permiso.
 
-   Pieles por `data-skin`: ghosty (default), easybits y neutral; cada una con su
+   Pieles por `data-skin`: ghosty (default), easybits, neutral y denik; cada una con su
    oscuro (`data-theme="dark"`, o `auto` siguiendo al sistema).
    ───────────────────────────────────────────────────────────────────────────── */
 
@@ -51,6 +51,9 @@
 
   /* Forma (los valores de gs). */
   --piloto-radius-bubble: 12px;
+  /* La esquina inferior derecha de TU burbuja (la «cola»). Si no se define, vale lo mismo que
+     `--piloto-radius-bubble` (el componente usa ese respaldo). */
+  /* --piloto-radius-bubble-tail: 12px; */
   --piloto-radius-input: 24px;
   --piloto-radius-card: 16px;
   --piloto-radius-button: 12px;
@@ -209,6 +212,80 @@
   --piloto-shadow-hero: 4px 4px 0 #000000;
 }
 
+/* ── Deník: azul #5158F6, tinta #11151A, Satoshi; tu burbuja oscura con cola, la respuesta sin
+   burbuja (el avatar a la izquierda va por `message.avatar`). La app anfitriona carga Satoshi. ── */
+.piloto[data-skin="denik"] {
+  --piloto-rem: 16px;
+  --piloto-font: "Satoshi", "Satoshi ", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  /* La respuesta va en la misma Satoshi, no en serif. */
+  --piloto-font-prose: "Satoshi", "Satoshi ", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --piloto-bg: #ffffff;
+  --piloto-surface: #f8f8fa;
+  --piloto-surface-2: #f2f2f2;
+  --piloto-surface-hover: #fafafa;
+  --piloto-text: #11151a;
+  --piloto-text-2: #4b5563;
+  --piloto-text-3: #8391a1;
+  --piloto-text-disabled: #c4cad2;
+  --piloto-text-inverse: #ffffff;
+  --piloto-inverse: #11151a;
+  --piloto-border: #f2f2f2;
+  --piloto-border-2: #f2f2f2;
+  --piloto-accent-100: #eeeffe;
+  --piloto-accent-soft: #a8abfa;
+  --piloto-accent: #5158f6;
+  --piloto-accent-strong: #3f46e0;
+  --piloto-on-accent: #ffffff;
+  --piloto-success: #10b981;
+  --piloto-danger: #ca5757;
+  --piloto-focus: #5158f6;
+  --piloto-user-bubble: #11151a;
+  --piloto-user-text: #ffffff;
+  --piloto-composer-bg: #ffffff;
+  --piloto-radius-bubble: 24px;
+  --piloto-radius-bubble-tail: 8px;
+  --piloto-radius-input: 24px;
+  --piloto-radius-card: 16px;
+  --piloto-radius-button: 12px;
+  --piloto-border-width: 1px;
+  --piloto-shadow-input: 0 4px 24px rgb(0 0 0 / 0.06);
+  --piloto-shadow-color: #11151a;
+  --piloto-shadow-hero: 5px 5px 0 #11151a;
+}
+.piloto[data-skin="denik"][data-theme="dark"] {
+  --piloto-bg: #11151a;
+  --piloto-surface: #1a1f26;
+  --piloto-surface-2: #242a33;
+  --piloto-surface-hover: #161b21;
+  --piloto-text: #f2f4f7;
+  --piloto-text-2: #c2c8d0;
+  --piloto-text-3: #8391a1;
+  --piloto-text-disabled: #4b5563;
+  --piloto-text-inverse: #11151a;
+  --piloto-inverse: #f2f4f7;
+  --piloto-border: #242a33;
+  --piloto-border-2: #1a1f26;
+  --piloto-accent-100: #1c2140;
+  --piloto-accent-soft: #3d43b8;
+  --piloto-accent: #6b71f8;
+  --piloto-accent-strong: #8a8ffa;
+  --piloto-user-bubble: #2a303a;
+  --piloto-user-text: #f2f4f7;
+  --piloto-composer-bg: #161b21;
+  --piloto-shadow-input: 0 4px 24px rgb(0 0 0 / 0.4);
+  --piloto-shadow-color: #5158f6;
+  --piloto-shadow-hero: 5px 5px 0 #5158f6;
+}
+/* Las piezas de Deník que no son sólo color. */
+.piloto[data-skin="denik"] .piloto-header { padding: 12px 16px; border-bottom: 1px solid var(--piloto-border); background: var(--piloto-bg); }
+.piloto[data-skin="denik"] .gc-msg-user { max-width: 85%; padding: 10px 16px; font-size: 14px; line-height: 20px; }
+.piloto[data-skin="denik"] .gc-input:focus-within { border-color: var(--piloto-accent); }
+/* El botón redondo: 36 px; apagado sigue azul (más tenue); al responder, círculo de tinta. */
+.piloto[data-skin="denik"] .gc-send,
+.piloto[data-skin="denik"] .gc-send-voice { width: 36px; height: 36px; }
+.piloto[data-skin="denik"] .gc-send[data-state="send"]:disabled { background: var(--piloto-accent); color: var(--piloto-on-accent); opacity: 0.4; }
+.piloto[data-skin="denik"] .gc-send[data-state="stop"] { background: var(--piloto-inverse); color: var(--piloto-text-inverse); }
+
 @media (prefers-color-scheme: dark) {
 .piloto[data-theme="auto"] {
   color-scheme: dark;
@@ -276,6 +353,30 @@
   --piloto-composer-bg: #171615;
   --piloto-shadow-color: #000000;
   --piloto-shadow-hero: 4px 4px 0 #000000;
+}
+.piloto[data-skin="denik"][data-theme="auto"] {
+  --piloto-bg: #11151a;
+  --piloto-surface: #1a1f26;
+  --piloto-surface-2: #242a33;
+  --piloto-surface-hover: #161b21;
+  --piloto-text: #f2f4f7;
+  --piloto-text-2: #c2c8d0;
+  --piloto-text-3: #8391a1;
+  --piloto-text-disabled: #4b5563;
+  --piloto-text-inverse: #11151a;
+  --piloto-inverse: #f2f4f7;
+  --piloto-border: #242a33;
+  --piloto-border-2: #1a1f26;
+  --piloto-accent-100: #1c2140;
+  --piloto-accent-soft: #3d43b8;
+  --piloto-accent: #6b71f8;
+  --piloto-accent-strong: #8a8ffa;
+  --piloto-user-bubble: #2a303a;
+  --piloto-user-text: #f2f4f7;
+  --piloto-composer-bg: #161b21;
+  --piloto-shadow-input: 0 4px 24px rgb(0 0 0 / 0.4);
+  --piloto-shadow-color: #5158f6;
+  --piloto-shadow-hero: 5px 5px 0 #5158f6;
 }
 }
 

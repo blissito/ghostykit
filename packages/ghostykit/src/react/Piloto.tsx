@@ -27,7 +27,7 @@ import type { Attachment, Decision, PermissionRequest, Reference, Turn } from ".
 import type { PilotTransport } from "../transport";
 import { AgentBubble, UserBubble } from "./Bubble";
 import { ReferenceChips, Suggestions } from "./Chips";
-import { Composer, type ComposerHandle } from "./Composer";
+import { Composer, type ComposerHandle, type ComposerIcons } from "./Composer";
 import { ConfirmCard } from "./ConfirmCard";
 import { PilotoContext, rootProps, usePiloto, type PilotoConfig, type PilotTheme } from "./context";
 import { BUILTIN_CUSTOM, isDev, resolvePlugins, type PilotoPlugin, type PluginCtx, type PluginEvent, type PluginView } from "./plugins";
@@ -73,6 +73,8 @@ export interface PilotoProps extends UsePilotOptions {
   welcome?: ReactNode;
   avatar?: ReactNode;
   placeholder?: string;
+  /** Íconos del botón redondo del composer: `send` (mandar) y `stop` (detener). Default: flecha y cuadrito. */
+  icons?: ComposerIcons;
   suggestions?: string[];
   features?: PilotoFeatures;
   /**
@@ -469,6 +471,7 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
         extras={plugins.composerActions.length ? <Views items={plugins.composerActions} ctx={ctx} styled={plugins.ghostykitStyled} inline /> : undefined}
         extrasEnd={plugins.composerActionsEnd.length ? <Views items={plugins.composerActionsEnd} ctx={ctx} styled={plugins.ghostykitStyled} inline /> : undefined}
         handleRef={composerHandle}
+        icons={props.icons}
         accept={accept}
         {...(maxFiles ? { maxFiles } : {})}
         {...(maxBytes ? { maxFileMb: maxBytes / (1024 * 1024) } : {})}
@@ -489,7 +492,15 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
 
   const aboveComposer = plugins.composerAbove.length ? <Views items={plugins.composerAbove} ctx={ctx} styled={plugins.ghostykitStyled} /> : null;
   const belowComposer = plugins.composerBelow.length ? <Views items={plugins.composerBelow} ctx={ctx} styled={plugins.ghostykitStyled} /> : null;
-  const header = plugins.header.length ? <Views items={plugins.header} ctx={ctx} styled={plugins.ghostykitStyled} inline /> : null;
+  // La barra de arriba: `header.start` a la izquierda (quién es), `header`/`header.end` a la derecha.
+  const headerStart = plugins.headerStart.length ? <Views items={plugins.headerStart} ctx={ctx} styled={plugins.ghostykitStyled} inline /> : null;
+  const headerEnd = plugins.header.length ? <Views items={plugins.header} ctx={ctx} styled={plugins.ghostykitStyled} inline /> : null;
+  const headerSides = (headerStart || headerEnd) && (
+    <>
+      {headerStart && <div className="piloto-header-start flex min-w-0 items-center gap-2">{headerStart}</div>}
+      {headerEnd && <div className="piloto-header-end ml-auto flex items-center gap-2">{headerEnd}</div>}
+    </>
+  );
 
   const Empty = plugins.empty?.value;
   const Waiting = plugins.waiting?.value;
@@ -588,7 +599,7 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
           // Un hilo vacío enseña lo mismo que la portada: la cara, el saludo, la caja y por dónde
           // empezar. Si no cabe (panel bajo), se desplaza: `safe center` nunca empuja nada fuera.
           <div className="gs-scroll flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-4 pb-[10vh] [justify-content:safe_center]">
-            {header && <div className="absolute right-4 top-3 flex gap-2">{header}</div>}
+            {headerSides && <div className="piloto-header absolute inset-x-0 top-0 z-10 flex items-center gap-2 px-4 pt-3">{headerSides}</div>}
             {Empty ? (
               <div {...mark(plugins.empty!.plugin)}>
                 <Empty ctx={ctx} />
@@ -619,7 +630,7 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
           </div>
         ) : (
           <>
-            {header && <div className="flex shrink-0 justify-end gap-2 px-4 pt-3 sm:px-6">{header}</div>}
+            {headerSides && <div className="piloto-header flex shrink-0 items-center gap-2 px-4 pt-3 sm:px-6">{headerSides}</div>}
             <div
               ref={scroller}
               onScroll={onScroll}

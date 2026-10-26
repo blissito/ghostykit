@@ -116,6 +116,14 @@ export interface ComposerProps {
   accept?: string;
   maxFiles?: number;
   maxFileMb?: number;
+  /** Íconos del botón de mandar y de detener. Default: flecha hacia arriba y cuadrito. */
+  icons?: ComposerIcons;
+}
+
+/** Los íconos propios del botón redondo del composer (`<Piloto icons={…} />`). */
+export interface ComposerIcons {
+  send?: ReactNode;
+  stop?: ReactNode;
 }
 
 export function Composer({
@@ -143,7 +151,10 @@ export function Composer({
   accept,
   maxFiles = 8,
   maxFileMb = 25,
+  icons,
 }: ComposerProps) {
+  const sendIcon = icons?.send ?? <ArrowUp className="h-4 w-4" />;
+  const stopIcon = icons?.stop ?? <Square className="h-3 w-3 fill-current" />;
   const { strings: t } = usePiloto();
   const [value, setValue] = useState(initialValue);
   const [files, setFiles] = useState<Pending[]>([]);
@@ -515,9 +526,9 @@ export function Composer({
               onClick={toggleRecording}
               aria-label={t.stopAndSendVoice}
               title={t.send}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-500 text-white hover:bg-brand-600"
+              className="gc-send-voice flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-500 text-white hover:bg-brand-600"
             >
-              <ArrowUp className="h-4 w-4" />
+              {sendIcon}
             </button>
           </div>
         ) : (
@@ -604,11 +615,12 @@ export function Composer({
               onClick={busy ? onStop : () => void submit()}
               disabled={(!busy && !canSend) || uploading}
               aria-label={busy ? t.stop : uploading ? t.uploading : t.send}
+              data-state={busy ? "stop" : "send"}
               className={`gc-send flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
                 busy || canSend || uploading ? "bg-brand-500 text-white hover:bg-brand-600" : "bg-background-disabled text-text-disabled"
               }`}
             >
-              {busy ? <Square className="h-3 w-3 fill-current" /> : uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
+              {busy ? stopIcon : uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : sendIcon}
             </button>
           </div>
         </div>

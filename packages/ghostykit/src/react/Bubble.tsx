@@ -59,7 +59,7 @@ export function UserBubble({ turn }: { turn: Turn }) {
         </div>
       )}
       {(inBubble.length > 0 || visible.trim()) && (
-        <div className="gc-msg-user max-w-[75%] whitespace-pre-wrap break-words rounded-(--piloto-radius-bubble) bg-(--piloto-user-bubble) px-4 py-3 font-sans text-base leading-[22px] text-(--piloto-user-text)">
+        <div className="gc-msg-user max-w-[75%] whitespace-pre-wrap break-words rounded-(--piloto-radius-bubble) rounded-br-[var(--piloto-radius-bubble-tail,var(--piloto-radius-bubble))] bg-(--piloto-user-bubble) px-4 py-3 font-sans text-base leading-[22px] text-(--piloto-user-text)">
           {inBubble.length > 0 && (
             <div className={`flex flex-wrap justify-end gap-1.5 ${visible.trim() ? "mb-2" : ""}`}>
               {inBubble.map((a, i) =>

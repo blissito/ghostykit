@@ -88,7 +88,7 @@ const ref = useRef<PilotoHandle>(null);
 <Piloto
   ref={ref}
   transport={transport}
-  skin="easybits"            // "ghosty" (default) | "easybits" | "neutral" | your own
+  skin="easybits"            // "ghosty" (default) | "easybits" | "neutral" | "denik" | your own
   theme="auto"               // "light" | "dark" | "auto"
   locale="en"                // Spanish by default
   agentName="Admin assistant"
@@ -107,7 +107,8 @@ ref.current?.send("Why did this fail?");                     // ask on the user'
 
 Other props: `features` (`attachments`, `retry`, `copy`, `usage`, `replyOptions`, `duration`,
 `steer`, `narration`: `false` keeps the text written before each tool as part of the answer instead of
-checked progress lines), `references` / `onReferencesChange`, `placeholder`, `avatar`, `initialTurns`, `loadOlder`
+checked progress lines), `icons` (`{ send?, stop? }`: your own nodes for the composer's round button;
+default arrow and square), `references` / `onReferencesChange`, `placeholder`, `avatar`, `initialTurns`, `loadOlder`
 (earlier pages of a long thread), `forwardedProps` (extra keys for every run, e.g.
 `{permissions: "ask"}`), and the callbacks `onTurnStart`, `onTitle`, `onState`, `onEvent` (every raw
 AG-UI event), `onSend`. The agent's shared state (`STATE_SNAPSHOT` + `STATE_DELTA`) is
@@ -173,7 +174,7 @@ const PLUGINS = [crm, modelPicker({ onChange: (model) => api.setModel(model) }),
 | `composer.below` | Under the message box. | suggestion chips |
 | `composer.attachments` | `upload`, `transcribe`, `voiceNoteText`, and the limits `accept`, `maxFiles`, `maxBytes`. A voice note keeps its audio attached when there is `upload`. | `{ upload, accept: "image/*", maxFiles: 4, maxBytes: 4_000_000 }` |
 | `composer.replace` | `{ when(ctx), view }`: drawn instead of the message box while `when` is true. | trial over (403 + `x-needs-login`) → "Create your account" |
-| `header` | Top right, over the thread. | share button |
+| `header` | The top bar, over the thread. A single view goes on the right; `{ start, end }` puts `start` on the left (who the agent is) and `end` on the right. | `{ start: avatar + name, end: new chat · close }` |
 | `sidePanel` | Next to the chat. | live page, subagents |
 | `aboveThread` | Above the messages. | a banner |
 | `empty` | The empty thread (instead of the greeting). | onboarding |
@@ -195,7 +196,7 @@ in the URL).
 - **Maps** (`strings`, `tools.verbs`, `tools.icons`, `vars`) are merged, and later plugins win. `markdown.transform`, `formatUserText` and `beforeSend` are chained.
 - **`events` and `state`** call every handler, in order.
 - **Keyed or single views** (`tools.render`, `message.custom`, `markdown.blocks`, `markdown.components`, `message.avatar`, `empty`, `waiting`, `composer.attachments`, `composer.replace`): the first plugin that declares one wins. A clash is a development warning.
-- **Lists** (`header`, `sidePanel`, `aboveThread`, `composer.actions`/`actionsEnd`/`above`/`below`, `message.user`/`assistant`/`assistantBefore`, `wrap`, `onTurnStart`/`onTurnDone`) all apply, in order.
+- **Lists** (`header` and its `start`/`end`, `sidePanel`, `aboveThread`, `composer.actions`/`actionsEnd`/`above`/`below`, `message.user`/`assistant`/`assistantBefore`, `wrap`, `onTurnStart`/`onTurnDone`) all apply, in order.
 
 In development, ghostykit also warns once about a `CUSTOM` event that nothing handles.
 
@@ -241,10 +242,16 @@ The variables a host (or a widget owner, inside an iframe) usually overrides:
 | `--piloto-composer-bg`, `--piloto-shadow-input` | The message box |
 | `--piloto-border`, `--piloto-border-width` | Borders |
 | `--piloto-radius-bubble`, `--piloto-radius-input`, `--piloto-radius-card`, `--piloto-radius-button` | Corners |
+| `--piloto-radius-bubble-tail` | The bottom-right corner of the user's bubble (its "tail"); defaults to `--piloto-radius-bubble` |
 | `--piloto-success`, `--piloto-danger`, `--piloto-warning`, `--piloto-warning-ink` | States, and the approval pass |
 
 Set them in your CSS on `.piloto`, or from a plugin with `vars` (e.g. the owner's theme of an
 embedded widget): `definePlugin({ name: "theme", vars: { "--piloto-accent": owner.color, "--piloto-radius-input": "8px" } })`.
+
+The `denik` skin is Deník's Nik: blue `#5158F6`, ink `#11151A`, Satoshi (the host loads the font), a
+dark user bubble with an 8 px tail, the answer without a bubble (add the avatar with
+`message.avatar`), and a 36 px round send button that turns into an ink circle while stopping. Pair it
+with `icons={{ send: <PaperPlane /> }}` and a plugin `header: { start, end }`.
 
 | Ghosty | EasyBits | Neutral |
 |---|---|---|
