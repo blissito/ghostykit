@@ -236,11 +236,13 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
       if (!steering && (input.messages.length || input.resume?.length || input.forwardedProps?.continueRun)) liveRun.current = input.runId;
       optsRef.current.onSend?.(input);
       let ended = false;
+      let gotEvent = false;
       try {
         await t.run(
           input,
           (e) => {
             if (c.signal.aborted) return;
+            gotEvent = true;
             optsRef.current.onEvent?.(e);
             for (const fn of listeners.current) fn(e);
             if (e.type === "RUN_FINISHED" || e.type === "RUN_ERROR") {
@@ -253,6 +255,13 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
         );
       } catch (err) {
         if (c.signal.aborted) return;
+        // El stream ya había empezado y se rompió a medias (`TypeError: network error` del navegador):
+        // es un corte, no un error del run. Se trata igual que el cierre sin RUN_FINISHED: reabrir.
+        if (gotEvent && !(err instanceof PilotHttpError)) {
+          if (!reopening) return runNow({ messages: [] }, true);
+          commit(sendFailed(ref.current, "Se cortó la conexión con el agente."));
+          return;
+        }
         const code = err instanceof PilotHttpError ? err.code : undefined;
         // El run al que se quería sumar ya terminó: el mensaje sale como run normal.
         if (code === "run_not_live" && steering && userMsg) {

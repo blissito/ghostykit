@@ -111,6 +111,30 @@ describe("usePilot sobre AG-UI", () => {
     act(() => root.unmount());
   });
 
+  it("si el stream truena a medias (TypeError: network error), también reabre en vez de pintar el error", async () => {
+    const inputs: RunAgentInput[] = [];
+    let n = 0;
+    const transport: PilotTransport = {
+      async run(input, onEvent) {
+        inputs.push(input);
+        if (n++ === 0) {
+          onEvent({ type: "RUN_STARTED", threadId: input.threadId, runId: input.runId } as never);
+          onEvent({ type: "TEXT_MESSAGE_CONTENT", messageId: "m", delta: "Empie" } as never);
+          throw new TypeError("network error");
+        }
+        for (const e of events("agui-open-done.sse")) onEvent(e);
+      },
+    };
+    const { pilot, root } = await mount(transport);
+    await act(async () => void (await pilot().send("corre la purga")));
+    expect(inputs).toHaveLength(2);
+    expect(inputs[1].messages).toEqual([]);
+    expect(pilot().state.busy).toBe(false);
+    expect(pilot().state.turns.map((t) => t.role)).toEqual(["user", "assistant"]);
+    expect(JSON.stringify(pilot().state)).not.toContain("network error");
+    act(() => root.unmount());
+  });
+
   it("detener corta la lectura y pide el cancel EXPLÍCITO del run (desconectarse no cancela)", async () => {
     const inputs: RunAgentInput[] = [];
     let release: () => void = () => {};
