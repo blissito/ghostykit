@@ -95,6 +95,7 @@ const ref = useRef<PilotoHandle>(null);
   welcome="How can I help with your crons?"
   suggestions={["Why did the monitor fail?"]}
   draft={{ text: "Why did the monitor fail?", key: row.id }} // prefilled + focused, not sent
+  background={running.length ? { label: "2 helpers working", since: oldestStart } : null} // work after the run closed
   threadId={conversationId}                                   // reopen a stored thread
   context={() => ({ screen: "crons", selected })}            // AG-UI `context`, every run
   onTurnDone={({ text }) => refreshMyData()}

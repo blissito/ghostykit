@@ -82,6 +82,12 @@ export interface PilotoProps extends UsePilotOptions {
    * fila («Pídeselo»). Cambiar el texto —o `key`, para repetir el mismo— la vuelve a poner.
    */
   draft?: string | { text: string; key?: string | number } | null;
+  /**
+   * Trabajo que sigue FUERA del run (ayudantes en segundo plano, una tarea larga): con el run ya
+   * cerrado, el hilo enseña `label` y cuenta desde `since` (ms) para que no parezca terminado.
+   * Con un run vivo manda su propia espera. `null` = nada pendiente.
+   */
+  background?: { label: string; since: number } | null;
   /** Referencias controladas (si no, Piloto las guarda; agrégalas con `ref.addReference`). */
   references?: Reference[];
   onReferencesChange?: (refs: Reference[]) => void;
@@ -718,6 +724,12 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
                       <WaitLabel since={state.turnStartedAt} step={state.step} showDuration={features.duration !== false} />
                     </div>
                   )
+                )}
+                {!busy && props.background && (
+                  <div data-background className="flex flex-col gap-1.5">
+                    <TypingDots />
+                    <WaitLabel text={props.background.label} since={props.background.since} showDuration={features.duration !== false} />
+                  </div>
                 )}
                 {notice && <p className="text-sm text-text-tertiary">{notice}</p>}
                 {error && <p className="text-sm text-text-danger">{error}</p>}
