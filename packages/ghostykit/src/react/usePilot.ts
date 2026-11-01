@@ -111,6 +111,8 @@ export interface Pilot {
   refresh: () => Promise<void>;
   /** Vuelve a leer el hilo (igual que `refresh`): para una reconexión que decide la app (p. ej. su bus de eventos). */
   reconnect: () => Promise<void>;
+  /** true mientras se abre un hilo existente (antes de su snapshot): no hay que enseñar el inicio vacío. */
+  opening: boolean;
   /** Escucha el inicio y el fin de cada turno de este cliente. Regresa cómo dejar de escuchar. */
   onTurn: (listener: (event: TurnEvent) => void) => () => void;
   /** Escucha cada evento AG-UI de este piloto (como `onEvent`, pero desde afuera). Regresa cómo dejar de escuchar. */
@@ -171,6 +173,8 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
   const transportRef = useRef(transport);
   transportRef.current = transport;
   const [threadId] = useState(() => opts.threadId ?? uuid());
+  // Abriendo un hilo existente: mientras llega su snapshot no se enseña el inicio vacío (parpadeaba).
+  const [opening, setOpening] = useState(() => Boolean(opts.threadId && transport));
   const ctrl = useRef<AbortController | null>(null);
   /** El `runId` del run que este cliente arrancó y sigue vivo (para detenerlo). */
   const liveRun = useRef<string | null>(null);
@@ -335,7 +339,13 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
       sentInitial.current = true;
       void sendRef.current(prompt);
     };
-    if (opts.threadId) void runNow({ messages: [] }, true).then(sendInitial);
+    if (opts.threadId) {
+      setOpening(true)
+      void runNow({ messages: [] }, true)
+        .catch(() => undefined)
+        .finally(() => alive && setOpening(false))
+        .then(sendInitial)
+    }
     // En un tick: el doble montaje de StrictMode no lo manda dos veces ni lo aborta.
     else setTimeout(sendInitial, 0);
     return () => {
@@ -513,5 +523,5 @@ export function usePilot(transport: PilotTransport | null, opts: UsePilotOptions
   const canSteer = Boolean(transport) && (opts.steer ?? ((state.agentState.caps as { steer?: unknown } | undefined)?.steer === true));
   const subagents = useMemo(() => subagentsOf(state.agentState), [state.agentState]);
 
-  return { state, threadId, send, stop, retry, respondPermission, recordDecision, expirePermission, canSteer, loadOlder, loadingOlder, subagents, stopSubagent, refresh, reconnect: refresh, continueRun, subscribe, onTurn };
+  return { state, threadId, opening, send, stop, retry, respondPermission, recordDecision, expirePermission, canSteer, loadOlder, loadingOlder, subagents, stopSubagent, refresh, reconnect: refresh, continueRun, subscribe, onTurn };
 }

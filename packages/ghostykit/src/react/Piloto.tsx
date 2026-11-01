@@ -434,7 +434,8 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
   // ── Lo que se pinta ─────────────────────────────────────────────────────────
   const last = turns[turns.length - 1];
   const toolRunning = busy && last?.role === "assistant" && (last.tools ?? []).some(isRunning);
-  const empty = turns.length === 0 && !busy;
+  const opening = pilot.opening && turns.length === 0
+  const empty = turns.length === 0 && !busy && !opening;
   const placeholder = props.placeholder ?? (props.agentName ? t.placeholder(props.agentName) : t.placeholderDefault);
   const { upload, transcribe, voiceNoteText, accept, maxFiles, maxBytes } = plugins.attachments;
   const showFiles = features.attachments ?? Boolean(upload);
@@ -604,7 +605,18 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
         className={`piloto ${plugins.className} ${props.className ?? ""}`}
         style={Object.keys(plugins.vars).length ? ({ ...plugins.vars, ...props.style } as CSSProperties) : props.style}
       >
-        {withPanel(empty ? (
+        {withPanel(opening ? (
+          // Abriendo el hilo: un indicador quieto, nunca el inicio vacío que luego salta a la conversación.
+          <div role="status" aria-label={t.opening} className="piloto-opening flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-text-secondary">
+            {headerSides && <div className="piloto-header absolute inset-x-0 top-0 z-10 flex items-center gap-2 px-4 pt-3">{headerSides}</div>}
+            <span className="flex gap-1.5" aria-hidden>
+              {[0, 1, 2].map((i) => (
+                <span key={i} className="h-2 w-2 animate-pulse rounded-full bg-current opacity-60" style={{ animationDelay: `${i * 150}ms` }} />
+              ))}
+            </span>
+            <span className="text-sm">{t.opening}</span>
+          </div>
+        ) : empty ? (
           // Un hilo vacío enseña lo mismo que la portada: la cara, el saludo, la caja y por dónde
           // empezar. Si no cabe (panel bajo), se desplaza: `safe center` nunca empuja nada fuera.
           <div className="gs-scroll flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-4 pb-[10vh] [justify-content:safe_center]">

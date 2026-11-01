@@ -60,6 +60,7 @@ export interface PilotStrings {
   steps: Record<string, string>;
   loadOlder: string;
   loadingOlder: string;
+  opening: string;
   /** El botón de la franja de un run cortado por el servidor (mismo rótulo en iOS y Android). */
   continueRun: string;
   /** La franja, si el servidor no dio razón. */
@@ -154,6 +155,7 @@ export const STRINGS_ES: PilotStrings = {
   steps: { waking: "Despertando al agente…", session: "Preparando la sesión…", compacting: "Resumiendo la conversación…" },
   loadOlder: "Cargar mensajes anteriores",
   loadingOlder: "Cargando…",
+  opening: "Abriendo la conversación…",
   continueRun: "Continuar",
   runCut: "La respuesta se cortó antes de terminar.",
   stalled: "Se atoró, sigo intentando…",
@@ -239,6 +241,7 @@ export const STRINGS_EN: PilotStrings = {
   steps: { waking: "Waking the agent…", session: "Starting the session…", compacting: "Compacting the conversation…" },
   loadOlder: "Load earlier messages",
   loadingOlder: "Loading…",
+  opening: "Opening the conversation…",
   continueRun: "Continue",
   runCut: "The answer was cut off before it finished.",
   stalled: "Got stuck, still trying…",
