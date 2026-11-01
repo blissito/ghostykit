@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProp
 import { Group, Panel, Separator, usePanelRef, type LayoutChangedMeta } from "react-resizable-panels";
 import { Drawer } from "vaul";
 import { AnimatePresence, motion } from "motion/react";
+import { SquarePen, X } from "lucide-react";
 
 // El piloto al lado de la app (pieza única; nació en EasyBits /dash/admin/crons).
 // Escritorio: panel redimensionable que EMPUJA el contenido, no lo tapa (abrir y cerrar se animan;
@@ -24,10 +25,14 @@ export type PilotoSplitOptions = {
   desktopMinWidth?: number;
   /** Se llama cada vez que se abre o se cierra (p. ej. para contraer el menú lateral de la app). */
   onOpenChange?: (open: boolean) => void;
+  /** Atajo para abrir/cerrar con ⌘/Ctrl + esta tecla (default "i"; `false` lo apaga). */
+  shortcut?: string | false;
+  /** Esc cierra el panel de escritorio (default true; en la hoja lo maneja vaul). */
+  escapeToClose?: boolean;
 };
 
 export function usePilotoSplit(options: PilotoSplitOptions | string) {
-  const { widthKey, defaultWidth = 420, desktopMinWidth = 1024, onOpenChange } =
+  const { widthKey, defaultWidth = 420, desktopMinWidth = 1024, onOpenChange, shortcut = "i", escapeToClose = true } =
     typeof options === "string" ? ({ widthKey: options } as PilotoSplitOptions) : options;
   const isDesktop = useIsDesktop(desktopMinWidth);
   const panelRef = usePanelRef();
@@ -74,6 +79,22 @@ export function usePilotoSplit(options: PilotoSplitOptions | string) {
   useEffect(() => {
     notify.current?.(isOpen);
   }, [isOpen]);
+
+  // ⌘/Ctrl + tecla abre o cierra; Esc cierra (si nadie más lo atendió, p. ej. un modal).
+  const toggleRef = useRef<() => void>(() => {});
+  toggleRef.current = isOpen ? close : open;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (shortcut && (e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === shortcut.toLowerCase()) {
+        e.preventDefault();
+        toggleRef.current();
+      } else if (escapeToClose && e.key === "Escape" && !e.defaultPrevented && isDesktop && isOpen) {
+        close();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [shortcut, escapeToClose, isDesktop, isOpen, close]);
 
   return {
     isDesktop,
@@ -317,5 +338,99 @@ export function PilotoLauncher({
         </motion.button>
       )}
     </AnimatePresence>
+  );
+}
+
+/**
+ * La conversación visible: una llave que se guarda en el navegador y cambia con «Nueva conversación».
+ * La app arma con ella el `threadId` (p. ej. `${base}-${key}`); el hilo anterior NO se borra (sigue en
+ * el servidor), sólo deja de verse. Sin almacenamiento, arranca en "1".
+ */
+export function useConversationKey(storageKey: string) {
+  const [key, setKey] = useState<string>(() => {
+    try {
+      return localStorage.getItem(storageKey) || "1";
+    } catch {
+      return "1";
+    }
+  });
+  const rotate = useCallback(() => {
+    const next = Date.now().toString(36);
+    try {
+      localStorage.setItem(storageKey, next);
+    } catch {
+      /* sin almacenamiento: dura lo que la pestaña */
+    }
+    setKey(next);
+  }, [storageKey]);
+  return [key, rotate] as const;
+}
+
+const PANEL_LABELS = {
+  es: { newConversation: "Nueva conversación", close: "Cerrar" },
+  en: { newConversation: "New conversation", close: "Close" },
+};
+
+/**
+ * La carcasa estándar del piloto en el panel o la hoja: encabezado (avatar, nombre y acciones:
+ * «Nueva conversación» y cerrar) y el chat debajo. En el panel queda pegado a la ventana aunque la
+ * página tenga scroll (el composer siempre a la vista). Va dentro de `PilotoSplit` (`piloto={(v) => …}`).
+ */
+export function PilotoPanel({
+  variant,
+  title,
+  avatar,
+  onClose,
+  onNewConversation,
+  canStartNew = true,
+  actions,
+  locale = "es",
+  className = "",
+  children,
+}: {
+  variant: PilotoSplitVariant;
+  title: ReactNode;
+  avatar?: ReactNode;
+  onClose?: () => void;
+  /** Sin esto no sale el botón. Normalmente `rotate` de `useConversationKey`. */
+  onNewConversation?: () => void;
+  /** Ocultar «Nueva conversación» (p. ej. con el hilo vacío). */
+  canStartNew?: boolean;
+  /** Más botones a la derecha del encabezado, antes de los estándar. */
+  actions?: ReactNode;
+  locale?: "es" | "en";
+  className?: string;
+  children: ReactNode;
+}) {
+  const sticky = useStickyPanelHeight(variant === "panel");
+  const t = PANEL_LABELS[locale];
+  return (
+    <aside
+      ref={sticky.ref}
+      aria-label={typeof title === "string" ? title : undefined}
+      style={sticky.style}
+      className={`gk-panel ${variant === "panel" ? "gk-panel-side" : ""} ${className}`}
+    >
+      <header className="gk-panel-header">
+        <div className="gk-panel-title">
+          {avatar}
+          <span>{title}</span>
+        </div>
+        <div className="gk-panel-actions">
+          {actions}
+          {onNewConversation && canStartNew && (
+            <button type="button" className="gk-panel-btn" onClick={onNewConversation} title={t.newConversation} aria-label={t.newConversation}>
+              <SquarePen size={17} strokeWidth={1.8} />
+            </button>
+          )}
+          {onClose && variant === "panel" && (
+            <button type="button" className="gk-panel-btn" onClick={onClose} title={t.close} aria-label={t.close}>
+              <X size={18} strokeWidth={1.8} />
+            </button>
+          )}
+        </div>
+      </header>
+      <div className="gk-panel-body">{children}</div>
+    </aside>
   );
 }

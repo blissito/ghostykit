@@ -69,3 +69,15 @@
 }
 .gk-launcher img { width: 32px; height: 32px; object-fit: contain; }
 .gk-launcher-icon { padding: 8px; }
+
+/* Carcasa estándar del piloto (PilotoPanel). Colores: --gk-panel-bg, --gk-panel-border, --gk-panel-fg, --gk-panel-muted, --gk-panel-hover. */
+.gk-panel { display: flex; width: 100%; flex-direction: column; overflow: hidden; background: var(--gk-panel-bg, #fff); }
+.gk-panel-side { border-left: 1px solid var(--gk-panel-border, #e5e7eb); }
+.gk-panel-header { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px 10px 16px; border-bottom: 1px solid var(--gk-panel-border, #eceef2); }
+.gk-panel-title { display: flex; min-width: 0; align-items: center; gap: 8px; color: var(--gk-panel-fg, #111827); font-size: 14px; font-weight: 600; }
+.gk-panel-title > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gk-panel-title img { width: 24px; height: 24px; object-fit: contain; flex-shrink: 0; }
+.gk-panel-actions { display: flex; align-items: center; gap: 2px; }
+.gk-panel-btn { display: inline-flex; width: 32px; height: 32px; align-items: center; justify-content: center; border: 0; border-radius: 9999px; background: transparent; color: var(--gk-panel-muted, #6b7280); cursor: pointer; }
+.gk-panel-btn:hover { background: var(--gk-panel-hover, rgb(17 24 39 / 0.06)); color: var(--gk-panel-fg, #111827); }
+.gk-panel-body { display: flex; min-height: 0; flex: 1; flex-direction: column; }

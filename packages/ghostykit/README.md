@@ -277,6 +277,7 @@ const split = usePilotoSplit({ widthKey: "app:agent-width", onOpenChange: setSid
 
 `useStickyPanelHeight(variant === "panel")` keeps the panel's composer in view while the page scrolls.
 `<PilotoLauncher split={split} label="Talk to Ghosty" avatarSrc=… className="fixed bottom-6 right-6" />` is the open button (spring in/out, hidden while open).
+`<PilotoPanel variant title avatar onClose onNewConversation>` is the standard shell (header with name, «New conversation» and close; sticky to the window). `useConversationKey(key)` gives `[key, rotate]` for the visible conversation: build your `threadId` with it — old threads are kept on the server, just hidden. `usePilotoSplit` also does ⌘/Ctrl+I to toggle and Esc to close (`shortcut`, `escapeToClose`).
 Colors: `--gk-split-handle`, `--gk-split-accent`, `--gk-split-sheet-bg`, `--gk-split-overlay`.
 
 ## Accessibility
