@@ -4,7 +4,7 @@
 
 /* Abrir y cerrar se animan; arrastrar, no. */
 .gk-split:not(:has([data-separator="active"])) > [data-panel] {
-  transition: flex-grow 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: flex-grow 320ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 @media (prefers-reduced-motion: reduce) {
   .gk-split > [data-panel] { transition: none; }
@@ -48,3 +48,24 @@
 }
 .gk-split-handle { margin: 8px auto !important; height: 6px !important; width: 48px !important; flex-shrink: 0; background: #d1d5db !important; }
 .gk-split-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Pastilla para abrir el piloto. Colores: --gk-launcher-bg, --gk-launcher-fg. */
+.gk-launcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px 8px 8px;
+  border: 0;
+  border-radius: 9999px;
+  background: var(--gk-launcher-bg, #191a20);
+  color: var(--gk-launcher-fg, #fff);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 12px 30px -10px rgb(25 26 32 / 0.6);
+  z-index: 40;
+}
+.gk-launcher img { width: 32px; height: 32px; object-fit: contain; }
+.gk-launcher-icon { padding: 8px; }

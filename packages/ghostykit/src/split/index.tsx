@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Group, Panel, Separator, usePanelRef, type LayoutChangedMeta } from "react-resizable-panels";
 import { Drawer } from "vaul";
+import { AnimatePresence, motion } from "motion/react";
 
 // El piloto al lado de la app (pieza única; nació en EasyBits /dash/admin/crons).
 // Escritorio: panel redimensionable que EMPUJA el contenido, no lo tapa (abrir y cerrar se animan;
@@ -9,6 +10,8 @@ import { Drawer } from "vaul";
 
 /** Hoja móvil: a media pantalla (se ve el contenido) o casi completa. */
 const SHEET_SNAPS = [0.6, 0.94];
+/** Lo que dura abrir o cerrar el panel (igual que la transición de `split.css`). */
+const OPEN_MS = 320;
 
 export type PilotoSplitVariant = "panel" | "sheet";
 
@@ -31,6 +34,14 @@ export function usePilotoSplit(options: PilotoSplitOptions | string) {
   const [panelOpen, setPanelOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  // Mientras abre o cierra, el piloto va a su ancho final (no se reacomoda a cada cuadro).
+  const [animating, setAnimating] = useState(false);
+  const animTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const animate = useCallback(() => {
+    setAnimating(true);
+    clearTimeout(animTimer.current);
+    animTimer.current = setTimeout(() => setAnimating(false), OPEN_MS + 40);
+  }, []);
 
   // Al pasar a móvil con el panel abierto, se cierra el panel y sigue en la hoja.
   useEffect(() => {
@@ -45,14 +56,17 @@ export function usePilotoSplit(options: PilotoSplitOptions | string) {
     if (!isDesktop) return setSheetOpen(true);
     const panel = panelRef.current;
     if (!panel || !panel.isCollapsed()) return;
+    animate();
     panel.expand();
     panel.resize(`${readWidth(widthKey, defaultWidth)}px`);
-  }, [isDesktop, panelRef, widthKey, defaultWidth]);
+  }, [isDesktop, panelRef, widthKey, defaultWidth, animate]);
 
   const close = useCallback(() => {
-    panelRef.current?.collapse();
+    const panel = panelRef.current;
+    if (panel && !panel.isCollapsed()) animate();
+    panel?.collapse();
     setSheetOpen(false);
-  }, [panelRef]);
+  }, [panelRef, animate]);
 
   const isOpen = isDesktop ? panelOpen : sheetOpen;
   const notify = useRef(onOpenChange);
@@ -70,6 +84,8 @@ export function usePilotoSplit(options: PilotoSplitOptions | string) {
     setSheetOpen,
     mounted,
     widthKey,
+    animating,
+    targetWidth: readWidth(widthKey, defaultWidth),
     /** Abierto en la forma que toca (panel o hoja). */
     isOpen,
     open,
@@ -108,7 +124,7 @@ export function PilotoSplit({
   /** Variables de color: `--gk-split-handle`, `--gk-split-accent`, `--gk-split-sheet-bg`, `--gk-split-overlay`. */
   style?: CSSProperties;
 }) {
-  const { isDesktop, panelRef, panelOpen, setPanelOpen, sheetOpen, setSheetOpen, mounted, widthKey } = split;
+  const { isDesktop, panelRef, panelOpen, setPanelOpen, sheetOpen, setSheetOpen, mounted, widthKey, animating, targetWidth } = split;
   const [sheetSnap, setSheetSnap] = useState<number>(SHEET_SNAPS[0]);
   const sheetChat = useRef<HTMLDivElement>(null);
   const [sheetChatH, setSheetChatH] = useState<number | null>(null);
@@ -158,7 +174,7 @@ export function PilotoSplit({
           >
             {/* Cerrado sigue montado (el hilo no se pierde), pero fuera del foco y del lector de pantalla. */}
             {mounted && isDesktop && (
-              <div style={{ height: "100%" }} inert={!panelOpen}>
+              <div style={{ height: "100%", width: animating ? `${targetWidth}px` : "100%" }} inert={!panelOpen}>
                 {piloto("panel")}
               </div>
             )}
@@ -259,4 +275,47 @@ export function useIsDesktop(minWidth = 1024) {
     return () => mq.removeEventListener("change", sync);
   }, [minWidth]);
   return desktop;
+}
+
+/**
+ * El botón para abrir el piloto: una pastilla con el avatar y «Hablar con …» que entra y sale con
+ * resorte (como el tablero de Ventas de gs). Se muestra sólo con el piloto cerrado.
+ */
+export function PilotoLauncher({
+  split,
+  label,
+  avatarSrc,
+  className = "",
+  style,
+}: {
+  split: PilotoSplitState;
+  /** Texto de la pastilla, p. ej. «Hablar con Ghosty». Sin texto, sólo el avatar. */
+  label?: string;
+  avatarSrc: string;
+  /** Posición y colores (`fixed bottom-6 right-6 …`). */
+  className?: string;
+  style?: CSSProperties;
+}) {
+  return (
+    <AnimatePresence>
+      {!split.isOpen && (
+        <motion.button
+          key="gk-launcher"
+          type="button"
+          onClick={split.open}
+          aria-label={label ?? "Abrir el piloto"}
+          title={label}
+          initial={{ opacity: 0, scale: 0.6, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.6, y: 20 }}
+          transition={{ type: "spring", stiffness: 400, damping: 24 }}
+          className={`gk-launcher ${label ? "" : "gk-launcher-icon"} ${className}`}
+          style={style}
+        >
+          <img src={avatarSrc} alt="" />
+          {label && <span>{label}</span>}
+        </motion.button>
+      )}
+    </AnimatePresence>
+  );
 }

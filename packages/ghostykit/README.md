@@ -276,6 +276,7 @@ const split = usePilotoSplit({ widthKey: "app:agent-width", onOpenChange: setSid
 ```
 
 `useStickyPanelHeight(variant === "panel")` keeps the panel's composer in view while the page scrolls.
+`<PilotoLauncher split={split} label="Talk to Ghosty" avatarSrc=… className="fixed bottom-6 right-6" />` is the open button (spring in/out, hidden while open).
 Colors: `--gk-split-handle`, `--gk-split-accent`, `--gk-split-sheet-bg`, `--gk-split-overlay`.
 
 ## Accessibility
