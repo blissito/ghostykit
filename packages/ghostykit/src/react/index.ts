@@ -28,3 +28,5 @@ export { STRINGS_EN, STRINGS_ES, type PilotStrings } from "./strings";
 // Lo de core y transport, para quien sólo instala `ghostykit`.
 export * from "../core";
 export { PilotHttpError, createAgUiTransport, readSse, type AgUiTransportOptions, type PilotTransport, type SseMessage } from "../transport";
+
+export { DeliveryCard, type Delivery } from "./Delivery";

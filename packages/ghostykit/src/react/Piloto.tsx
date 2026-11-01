@@ -29,6 +29,7 @@ import { AgentBubble, UserBubble } from "./Bubble";
 import { ReferenceChips, Suggestions } from "./Chips";
 import { Composer, type ComposerHandle, type ComposerIcons } from "./Composer";
 import { ConfirmCard } from "./ConfirmCard";
+import { DeliveryCard } from "./Delivery";
 import { PilotoContext, rootProps, usePiloto, type PilotoConfig, type PilotTheme } from "./context";
 import { BUILTIN_CUSTOM, isDev, resolvePlugins, type PilotoPlugin, type PluginCtx, type PluginEvent, type PluginView } from "./plugins";
 import { TypingDots, WaitLabel } from "./Status";
@@ -515,6 +516,8 @@ export const Piloto = forwardRef<PilotoHandle, PilotoProps>(function Piloto(prop
   const renderDeliveries = (turn: Turn, live: boolean) => {
     const custom = (turn.custom ?? []).map((entry, i) => {
       const owner = plugins.customRenders[entry.name];
+      // Un archivo entregado se pinta solo (tarjeta estándar) si ningún plugin lo reclama.
+      if (!owner && entry.name === "ghosty.delivery") return <DeliveryCard key={`c${i}`} entry={entry} locale={props.locale === "en" ? "en" : "es"} />;
       if (!owner) return null;
       const C = owner.value;
       return (

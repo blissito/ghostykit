@@ -400,6 +400,7 @@ export function resolvePlugins(list: readonly PilotoPlugin[] = []): ResolvedPlug
 
 /** Los CUSTOM que ghostykit atiende solo (no hace falta un plugin para ellos). */
 export const BUILTIN_CUSTOM = new Set([
+  "ghosty.delivery",
   "ghosty.title",
   "ghosty.history",
   "ghosty.injected",
