@@ -34,22 +34,17 @@ const kind = (mime?: string | null, name?: string) => {
   return ext && ext.length <= 5 ? ext : "Archivo";
 };
 
-/** Ícono de archivo (hoja con esquina doblada) del color del tipo y su extensión abajo. */
+/** Ícono de archivo: hoja con esquina doblada y renglones, del color del tipo sobre un fondo tenue. */
 function FileKindIcon({ type }: { type: string }) {
   const color = KIND_COLORS[type] ?? "#6B7280";
-  const label = type === "Archivo" ? "" : type;
   return (
-    <svg width="34" height="40" viewBox="0 0 34 40" className="shrink-0" aria-hidden>
-      <path d="M4 0h18l12 12v24a4 4 0 0 1-4 4H4a4 4 0 0 1-4-4V4a4 4 0 0 1 4-4Z" fill={color} />
-      <path d="M22 0v8a4 4 0 0 0 4 4h8Z" fill="#fff" fillOpacity=".45" />
-      {label ? (
-        <text x="17" y="31" textAnchor="middle" fontSize={label.length > 3 ? 7.5 : 9} fontWeight="700" fill="#fff" fontFamily="system-ui, sans-serif" letterSpacing=".3">
-          {label}
-        </text>
-      ) : (
-        <path d="M9 22h16M9 27h16M9 32h10" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
-      )}
-    </svg>
+    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg" style={{ background: `${color}1A` }} aria-hidden>
+      <svg width="22" height="26" viewBox="0 0 22 26" fill="none">
+        <path d="M3 1h10l7 7v15a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2Z" fill="#fff" stroke={color} strokeWidth="1.8" strokeLinejoin="round" />
+        <path d="M13 1v5a2 2 0 0 0 2 2h5" stroke={color} strokeWidth="1.8" strokeLinejoin="round" />
+        <path d="M6 14h10M6 18h10M6 22h6" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    </span>
   );
 }
 
