@@ -97,6 +97,7 @@ const base = await remToVar((await postcss([isolate]).process(readFileSync(join(
 const banner = "/* ghostykit — Ghosty Autopilot · MIT · https://github.com/blissito/ghostykit */\n";
 // La piel va DESPUÉS: a igual especificidad, sus piezas con nombre ganan a las utilidades.
 writeFileSync(join(pkg, "dist/styles.css"), `${banner}/* ── Utilidades (Tailwind v4, encerradas en .piloto) ── */\n${scoped}\n/* ── La piel ── */\n${base}`);
+writeFileSync(join(pkg, "dist/split.css"), readFileSync(join(pkg, "src/styles/split.css"), "utf8"));
 writeFileSync(join(pkg, "dist/fonts.css"), readFileSync(join(pkg, "src/styles/fonts.css"), "utf8"));
 rmSync(dirname(tmp), { recursive: true, force: true });
 console.log(`dist/styles.css  ${(Buffer.byteLength(base + scoped) / 1024).toFixed(1)}kb`);

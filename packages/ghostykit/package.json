@@ -1,6 +1,6 @@
 {
   "name": "ghostykit",
-  "version": "0.8.2",
+  "version": "0.9.0",
   "description": "Ghosty Autopilot — the autopilot chat for your React app, on AG-UI: works with LangGraph, Mastra, CrewAI or any AG-UI agent. Streaming text, agent steps, human approval cards (interrupt/resume), attachments and voice.",
   "type": "module",
   "main": "./dist/core/index.js",
@@ -30,9 +30,14 @@
       "types": "./dist/pointer/index.d.ts",
       "import": "./dist/pointer/index.js"
     },
+    "./split": {
+      "types": "./dist/split/index.d.ts",
+      "import": "./dist/split/index.js"
+    },
     "./styles.css": "./dist/styles.css",
     "./package.json": "./package.json",
-    "./fonts.css": "./dist/fonts.css"
+    "./fonts.css": "./dist/fonts.css",
+    "./split.css": "./dist/split.css"
   },
   "files": [
     "dist",
@@ -53,10 +58,18 @@
     "motion": ">=11",
     "react": ">=18",
     "react-dom": ">=18",
-    "streamdown": ">=2.5.0 <3"
+    "streamdown": ">=2.5.0 <3",
+    "react-resizable-panels": ">=4.15 <5",
+    "vaul": ">=1.1 <2"
   },
   "peerDependenciesMeta": {
     "@ghostystudio/pointer": {
+      "optional": true
+    },
+    "react-resizable-panels": {
+      "optional": true
+    },
+    "vaul": {
       "optional": true
     }
   },
@@ -76,7 +89,9 @@
     "streamdown": "^2.7.0",
     "tailwindcss": "^4.1.0",
     "typescript": "^5.9.0",
-    "vitest": "^3.2.0"
+    "vitest": "^3.2.0",
+    "react-resizable-panels": "^4.15.0",
+    "vaul": "^1.1.2"
   },
   "keywords": [
     "acp",

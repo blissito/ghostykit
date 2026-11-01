@@ -1,0 +1,50 @@
+/* ghostykit/split — el piloto al lado de la app. Colores por variable:
+   --gk-split-handle (agarradera en reposo), --gk-split-accent (al arrastrar),
+   --gk-split-sheet-bg y --gk-split-overlay (hoja móvil). */
+
+/* Abrir y cerrar se animan; arrastrar, no. */
+.gk-split:not(:has([data-separator="active"])) > [data-panel] {
+  transition: flex-grow 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .gk-split > [data-panel] { transition: none; }
+}
+
+/* El borde que se arrastra: una franja ancha para atinarle, con una agarradera que se enciende. */
+.gk-split-separator { position: relative; width: 12px; cursor: col-resize; }
+.gk-split-separator::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+  border-radius: 9999px;
+  background: var(--gk-split-handle, #9ca3af);
+  transition: background-color 120ms, height 120ms;
+}
+.gk-split-separator:hover::after,
+.gk-split-separator[data-separator="active"]::after,
+.gk-split-separator:focus-visible::after {
+  height: 100%;
+  background: var(--gk-split-accent, #6366f1);
+}
+
+/* Hoja móvil (vaul). */
+.gk-split-overlay { position: fixed; inset: 0; z-index: 40; background: var(--gk-split-overlay, rgb(0 0 0 / 0.3)); }
+.gk-split-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  height: 94dvh;
+  border-radius: 16px 16px 0 0;
+  background: var(--gk-split-sheet-bg, #fff);
+  outline: none;
+}
+.gk-split-handle { margin: 8px auto !important; height: 6px !important; width: 48px !important; flex-shrink: 0; background: #d1d5db !important; }
+.gk-split-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

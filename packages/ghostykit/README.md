@@ -258,6 +258,26 @@ with `icons={{ send: <PaperPlane /> }}` and a plugin `header: { start, end }`.
 |---|---|---|
 | ![Ghosty skin](https://raw.githubusercontent.com/blissito/ghostykit/main/docs/screenshots/ghosty-light-mobile-2-permission.png) | ![EasyBits skin, dark](https://raw.githubusercontent.com/blissito/ghostykit/main/docs/screenshots/easybits-dark-mobile-2-permission.png) | ![Neutral skin](https://raw.githubusercontent.com/blissito/ghostykit/main/docs/screenshots/neutral-light-mobile-2-permission.png) |
 
+
+## Side panel that pushes your app (`ghostykit/split`)
+
+`PilotoSplit` puts the chat next to your app instead of over it: on desktop a resizable panel that
+pushes the content (open/close animate, width remembered); on mobile a bottom sheet. Optional peers:
+`react-resizable-panels` and `vaul`.
+
+```tsx
+import { PilotoSplit, usePilotoSplit, useStickyPanelHeight } from "ghostykit/split";
+import "ghostykit/split.css";
+
+const split = usePilotoSplit({ widthKey: "app:agent-width", onOpenChange: setSidebarCollapsed });
+<PilotoSplit id="agent" split={split} title="Assistant" piloto={(variant) => <MyPanel variant={variant} onClose={split.close} />}>
+  <main>…</main>
+</PilotoSplit>
+```
+
+`useStickyPanelHeight(variant === "panel")` keeps the panel's composer in view while the page scrolls.
+Colors: `--gk-split-handle`, `--gk-split-accent`, `--gk-split-sheet-bg`, `--gk-split-overlay`.
+
 ## Accessibility
 
 - Keyboard-first: Enter sends, Shift+Enter adds a new line, Backspace on an empty box removes the last reference. Menus close with Escape, and focus rings are visible (`--piloto-focus`).

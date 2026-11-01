@@ -9,6 +9,7 @@ await build({
     "react/index": "src/react/index.ts",
     "pointer/index": "src/pointer/index.ts",
     "plugins/index": "src/plugins/index.tsx",
+    "split/index": "src/split/index.tsx",
   },
   outdir: "dist",
   bundle: true,
@@ -20,7 +21,7 @@ await build({
   sourcemap: false,
   legalComments: "none",
   chunkNames: "chunks/[name]-[hash]",
-  external: ["react", "react-dom", "react/jsx-runtime", "motion", "motion/*", "streamdown", "@ghostystudio/pointer", "@ghostystudio/pointer/*"],
+  external: ["react", "react-dom", "react/jsx-runtime", "motion", "motion/*", "streamdown", "@ghostystudio/pointer", "@ghostystudio/pointer/*", "react-resizable-panels", "vaul"],
   mainFields: ["module", "main"],
   logLevel: "info",
 });
