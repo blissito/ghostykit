@@ -13,6 +13,8 @@ import { SquarePen, X } from "lucide-react";
 const SHEET_SNAPS = [0.6, 0.94];
 /** Lo que dura abrir o cerrar el panel (igual que la transición de `split.css`). */
 const OPEN_MS = 320;
+/** ⌘I (piloto) y ⌘K (paleta, lo que la gente prueba primero). */
+const DEFAULT_SHORTCUT = ["i", "k"];
 
 export type PilotoSplitVariant = "panel" | "sheet";
 
@@ -25,14 +27,14 @@ export type PilotoSplitOptions = {
   desktopMinWidth?: number;
   /** Se llama cada vez que se abre o se cierra (p. ej. para contraer el menú lateral de la app). */
   onOpenChange?: (open: boolean) => void;
-  /** Atajo para abrir/cerrar con ⌘/Ctrl + esta tecla (default "i"; `false` lo apaga). */
-  shortcut?: string | false;
+  /** Atajo para abrir/cerrar con ⌘/Ctrl + esta(s) tecla(s) (default ["i", "k"]; `false` lo apaga). */
+  shortcut?: string | string[] | false;
   /** Esc cierra el panel de escritorio (default true; en la hoja lo maneja vaul). */
   escapeToClose?: boolean;
 };
 
 export function usePilotoSplit(options: PilotoSplitOptions | string) {
-  const { widthKey, defaultWidth = 420, desktopMinWidth = 1024, onOpenChange, shortcut = "i", escapeToClose = true } =
+  const { widthKey, defaultWidth = 420, desktopMinWidth = 1024, onOpenChange, shortcut = DEFAULT_SHORTCUT, escapeToClose = true } =
     typeof options === "string" ? ({ widthKey: options } as PilotoSplitOptions) : options;
   const isDesktop = useIsDesktop(desktopMinWidth);
   const panelRef = usePanelRef();
@@ -83,9 +85,13 @@ export function usePilotoSplit(options: PilotoSplitOptions | string) {
   // ⌘/Ctrl + tecla abre o cierra; Esc cierra (si nadie más lo atendió, p. ej. un modal).
   const toggleRef = useRef<() => void>(() => {});
   toggleRef.current = isOpen ? close : open;
+  const keys = (shortcut === false ? [] : Array.isArray(shortcut) ? shortcut : [shortcut]).map((k) => k.toLowerCase());
+  const keysId = keys.join(",");
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (shortcut && (e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === shortcut.toLowerCase()) {
+      // En un editor enriquecido ⌘I/⌘K son itálica y liga: no se los robamos.
+      const editing = (e.target as HTMLElement | null)?.isContentEditable;
+      if (!editing && (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && keys.includes(e.key.toLowerCase())) {
         e.preventDefault();
         toggleRef.current();
       } else if (escapeToClose && e.key === "Escape" && !e.defaultPrevented && isDesktop && isOpen) {
@@ -94,7 +100,8 @@ export function usePilotoSplit(options: PilotoSplitOptions | string) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [shortcut, escapeToClose, isDesktop, isOpen, close]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keysId, escapeToClose, isDesktop, isOpen, close]);
 
   return {
     isDesktop,
@@ -325,7 +332,7 @@ export function PilotoLauncher({
           type="button"
           onClick={split.open}
           aria-label={label ?? "Abrir el piloto"}
-          title={label}
+          title={label ? `${label} · ⌘I` : undefined}
           initial={{ opacity: 0, scale: 0.6, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.6, y: 20 }}
