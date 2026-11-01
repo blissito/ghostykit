@@ -1,4 +1,4 @@
-import { Download, ExternalLink, FileText } from "lucide-react";
+import { Download, ExternalLink } from "lucide-react";
 import type { CustomEntry } from "../core/types";
 
 /** Lo que manda gs en `CUSTOM ghosty.delivery` (un archivo que el agente entregó). */
@@ -34,6 +34,25 @@ const kind = (mime?: string | null, name?: string) => {
   return ext && ext.length <= 5 ? ext : "Archivo";
 };
 
+/** Ícono de archivo (hoja con esquina doblada) del color del tipo y su extensión abajo. */
+function FileKindIcon({ type }: { type: string }) {
+  const color = KIND_COLORS[type] ?? "#6B7280";
+  const label = type === "Archivo" ? "" : type;
+  return (
+    <svg width="34" height="40" viewBox="0 0 34 40" className="shrink-0" aria-hidden>
+      <path d="M4 0h18l12 12v24a4 4 0 0 1-4 4H4a4 4 0 0 1-4-4V4a4 4 0 0 1 4-4Z" fill={color} />
+      <path d="M22 0v8a4 4 0 0 0 4 4h8Z" fill="#fff" fillOpacity=".45" />
+      {label ? (
+        <text x="17" y="31" textAnchor="middle" fontSize={label.length > 3 ? 7.5 : 9} fontWeight="700" fill="#fff" fontFamily="system-ui, sans-serif" letterSpacing=".3">
+          {label}
+        </text>
+      ) : (
+        <path d="M9 22h16M9 27h16M9 32h10" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+      )}
+    </svg>
+  );
+}
+
 /**
  * La tarjeta estándar de un archivo entregado (`ghosty.delivery`): nombre, tipo y tamaño, «Abrir» y
  * «Descargar». Piloto la pinta sola; un plugin con `message.custom["ghosty.delivery"]` la reemplaza.
@@ -51,13 +70,7 @@ export function DeliveryCard({ entry, locale = "es" }: { entry: CustomEntry; loc
   return (
     <div className="piloto-delivery mt-3 flex max-w-md items-center gap-1 rounded-xl border border-irongray/20 bg-irongray/5 pr-2 transition-colors hover:border-brand-500/40 hover:bg-brand-500/5">
       <a href={download} download={name} className="flex min-w-0 flex-1 items-center gap-3 p-3" title={downloadLabel} aria-label={downloadLabel}>
-        <span
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold tracking-wide text-white"
-          style={{ background: KIND_COLORS[type] ?? "#6B7280" }}
-          aria-hidden
-        >
-          {type === "Archivo" ? <FileText size={20} strokeWidth={1.8} /> : type}
-        </span>
+        <FileKindIcon type={type} />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium text-dark">{d.titulo || name}</span>
           <span className="block truncate text-xs text-metal">{meta}</span>
