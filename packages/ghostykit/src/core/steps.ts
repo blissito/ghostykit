@@ -51,8 +51,12 @@ function namedVerb(t: ToolEntry, verbs: ToolVerbs): { key: string; verb: ToolVer
 
 /** El rótulo de un paso: el verbo de su nombre, o el título que manda el servidor, o su clase. */
 export function stepLabel(t: ToolEntry, verbs: ToolVerbs, fallback = "Paso"): string {
-  if (t.label) return t.label;
+  // Un `label` que es el nombre crudo de la herramienta (`mcp__acali__low_stock`, `ToolSearch`) no le
+  // gana al verbo que la app dio para ese nombre.
+  const rawLabel = !!t.label && !/\s/.test(t.label);
+  if (t.label && !rawLabel) return t.label;
   const named = namedVerb(t, verbs);
+  if (!named && t.label) return t.label;
   if (named) return isRunning(t) && named.verb.running ? named.verb.running : named.verb.one;
   return t.title ?? t.kind ?? fallback;
 }
@@ -114,6 +118,8 @@ export const TOOL_VERBS_ES: ToolVerbs = {
   glob: { one: "Busqué archivos", many: "Busqué archivos" },
   search: { one: "Busqué", many: "Busqué %n veces" },
   tool_search: { one: "Busqué una herramienta", many: "Busqué %n herramientas" },
+  ToolSearch: { one: "Busqué una herramienta", many: "Busqué %n herramientas" },
+  create_document: { one: "Armé el documento", many: "Armé %n documentos" },
   web_search: { one: "Busqué en la web", many: "Busqué en la web" },
   web_fetch: { one: "Abrí una página", many: "Abrí %n páginas" },
   fetch: { one: "Abrí una página", many: "Abrí %n páginas" },

@@ -68,6 +68,15 @@ describe("pasos", () => {
     expect(summarizeTools([t, { ...t, id: "2" }], verbs)).toBe("Corrí 2 crons");
   });
 
+  it("un label que es el nombre crudo no le gana al verbo de la app; uno con texto sí", () => {
+    const verbs = { ...TOOL_VERBS_ES, low_stock: { one: "Revisé inventario", many: "Revisé inventario" } };
+    const raw = { id: "1", title: "mcp__acali__low_stock", label: "mcp__acali__low_stock", status: "completed" };
+    expect(stepLabel(raw, verbs)).toBe("Revisé inventario");
+    expect(stepLabel({ ...raw, label: "Revisando 3 productos" }, verbs)).toBe("Revisando 3 productos");
+    expect(stepLabel({ id: "2", title: "ToolSearch", label: "ToolSearch", status: "completed" }, verbs)).toBe("Busqué una herramienta");
+    expect(stepLabel({ id: "3", title: "otra", label: "otra", status: "completed" }, verbs)).toBe("otra");
+  });
+
   it("agrupa pasos iguales y el que corre o falla manda", () => {
     const tools = [
       { id: "a", title: "Consultando la hoja", detail: "Guardias.xlsx", status: "completed" },

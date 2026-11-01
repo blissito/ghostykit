@@ -29,20 +29,23 @@ export function DeliveryCard({ entry, locale = "es" }: { entry: CustomEntry; loc
   const name = d.nombre || d.titulo || "archivo";
   const download = d.url + (d.url.includes("?") ? "&" : "?") + "download=1";
   const meta = [kind(d.mime, name), kb(d.size)].filter(Boolean).join(" · ");
+  const openLabel = locale === "en" ? "Open" : "Abrir";
+  const downloadLabel = locale === "en" ? `Download ${name}` : `Descargar ${name}`;
+  // Toda la tarjeta descarga; el ícono de la derecha abre en otra pestaña.
   return (
-    <div className="piloto-delivery mt-3 flex max-w-md items-center gap-3 rounded-xl border border-irongray/20 bg-irongray/5 p-3">
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-500/10 text-brand-500">
-        <FileText size={20} strokeWidth={1.8} />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-dark">{d.titulo || name}</p>
-        <p className="truncate text-xs text-metal">{meta}</p>
-      </div>
-      <a href={d.url} target="_blank" rel="noopener noreferrer" className="inline-flex h-8 w-8 items-center justify-center rounded-full text-metal hover:bg-irongray/10 hover:text-dark" title={locale === "en" ? "Open" : "Abrir"} aria-label={locale === "en" ? "Open" : "Abrir"}>
-        <ExternalLink size={16} />
+    <div className="piloto-delivery mt-3 flex max-w-md items-center gap-1 rounded-xl border border-irongray/20 bg-irongray/5 pr-2 transition-colors hover:border-brand-500/40 hover:bg-brand-500/5">
+      <a href={download} download={name} className="flex min-w-0 flex-1 items-center gap-3 p-3" title={downloadLabel} aria-label={downloadLabel}>
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-500/10 text-brand-500">
+          <FileText size={20} strokeWidth={1.8} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium text-dark">{d.titulo || name}</span>
+          <span className="block truncate text-xs text-metal">{meta}</span>
+        </span>
+        <Download size={16} className="shrink-0 text-metal" />
       </a>
-      <a href={download} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-metal hover:bg-irongray/10 hover:text-dark" title={locale === "en" ? "Download" : "Descargar"} aria-label={locale === "en" ? "Download" : "Descargar"}>
-        <Download size={16} />
+      <a href={d.url} target="_blank" rel="noopener noreferrer" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-metal hover:bg-irongray/10 hover:text-dark" title={openLabel} aria-label={openLabel}>
+        <ExternalLink size={16} />
       </a>
     </div>
   );
