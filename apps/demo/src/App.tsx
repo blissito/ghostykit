@@ -75,6 +75,22 @@ export function App() {
   const [selected, setSelected] = useState<string | null>(null);
   const [log, setLog] = useState<string[]>([]);
   const [thread, setThread] = useState<string | null>(null);
+  // `?ask=<texto>`: manda ese mensaje al abrir (para las capturas sin clics).
+  useEffect(() => {
+    const ask = q.get("ask");
+    if (ask) setTimeout(() => pilot.current?.send(ask), 300);
+    // `&approve=1`: además aprueba la tarjeta en cuanto aparece (captura del renglón «Aprobaste: …»).
+    if (ask && q.get("approve") === "1") {
+      const id = setInterval(() => {
+        const go = document.querySelector<HTMLButtonElement>(".piloto-ticket .piloto-btn-go");
+        if (go) {
+          clearInterval(id);
+          go.click();
+        }
+      }, 200);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     const pick = (e: Event) => setSelected((e as CustomEvent<string>).detail);
     window.addEventListener("demo:select", pick);
@@ -89,6 +105,7 @@ export function App() {
     return (
       <div style={{ height: "100%" }}>
         <Piloto
+          ref={pilot}
           transport={transport}
           agentName="Ghosty"
           skin={skin}

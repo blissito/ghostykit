@@ -20,6 +20,7 @@ export {
   takeQueued,
   toPermission,
 } from "./reducer";
+export { formatHumanDate, humanizeDates, type HumanDateOptions } from "./dates";
 export { applyJsonPatch, type PatchOp } from "./jsonPatch";
 export { extractBlocks, isNarration, narrationToMarkdown, splitNarration, type TextBlock } from "./narration";
 export { cleanReplyOption, extractReplyOptions, type ReplyOptions } from "./options";

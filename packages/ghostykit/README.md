@@ -269,7 +269,7 @@ pushes the content (open/close animate, width remembered); on mobile a bottom sh
 import { PilotoSplit, usePilotoSplit, useStickyPanelHeight } from "ghostykit/split";
 import "ghostykit/split.css";
 
-const split = usePilotoSplit({ widthKey: "app:agent-width", onOpenChange: setSidebarCollapsed });
+const split = usePilotoSplit({ widthKey: "app:agent-width", openKey: "app:agent-open", onOpenChange: setSidebarCollapsed });
 <PilotoSplit id="agent" split={split} title="Assistant" piloto={(variant) => <MyPanel variant={variant} onClose={split.close} />}>
   <main>…</main>
 </PilotoSplit>
@@ -277,7 +277,7 @@ const split = usePilotoSplit({ widthKey: "app:agent-width", onOpenChange: setSid
 
 `useStickyPanelHeight(variant === "panel")` keeps the panel's composer in view while the page scrolls.
 `<PilotoLauncher split={split} label="Talk to Ghosty" avatarSrc=… className="fixed bottom-6 right-6" />` is the open button (spring in/out, hidden while open).
-`<PilotoPanel variant title avatar onClose onNewConversation>` is the standard shell (header with name, «New conversation» and close; sticky to the window). `useConversationKey(key)` gives `[key, rotate]` for the visible conversation: build your `threadId` with it — old threads are kept on the server, just hidden. `usePilotoSplit` also does ⌘/Ctrl+I (and ⌘K) to toggle and Esc to close (`shortcut`, `escapeToClose`).
+`<PilotoPanel variant title avatar onClose onNewConversation>` is the standard shell (header with name, «New conversation» and close; sticky to the window). `useConversationKey(key)` gives `[key, rotate]` for the visible conversation: build your `threadId` with it — old threads are kept on the server, just hidden. `usePilotoSplit` also does ⌘/Ctrl+I (and ⌘K) to toggle and Esc to close (`shortcut`, `escapeToClose`). With `openKey` it remembers whether it was open: after a reload the desktop panel comes back open (the mobile sheet never reopens by itself).
 Colors: `--gk-split-handle`, `--gk-split-accent`, `--gk-split-sheet-bg`, `--gk-split-overlay`.
 
 ## Accessibility

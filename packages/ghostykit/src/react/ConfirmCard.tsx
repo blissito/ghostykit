@@ -4,9 +4,10 @@
 // («Aprobado», «Rechazado») y luego la tarjeta se recoge en una línea bajo la respuesta.
 //
 // `onRespond` CONTESTA (el `resume` sale en el siguiente run). `onSettled` llega cuando el sello ya se
-// vio: ahí se anota la decisión y la tarjeta sale.
+// vio: la tarjeta sale con su animación y ahí se anota la decisión.
 import { CircleCheck, CircleSlash, Clock, ShieldAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { humanizeDates } from "../core/dates";
 import { expiryMs } from "../core/reducer";
 import type { Decision, PermissionOption, PermissionRequest } from "../core/types";
 import { usePiloto } from "./context";
@@ -36,6 +37,10 @@ function useRemaining(expiresAt?: string | number): { left: number; total: numbe
 
 /** Cuánto se queda el sello a la vista antes de que la tarjeta se recoja. */
 const STAMP_MS = 1100;
+/** Lo que dura la salida (`piloto-ticket-out` en base.css). Sin movimiento, sale al instante. */
+const EXIT_MS = 240;
+const exitMs = () =>
+  typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : EXIT_MS;
 
 type Stamp = Decision["status"];
 
@@ -56,6 +61,18 @@ export function ConfirmCard({
   const { strings: t } = usePiloto();
   const [pending, setPending] = useState<string | null>(null);
   const [stamp, setStamp] = useState<Stamp | null>(null);
+  const [leaving, setLeaving] = useState(false);
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  useEffect(() => () => timers.current.forEach(clearTimeout), []);
+  // El sello se ve, la tarjeta sale (animada) y hasta entonces se avisa.
+  const leaveThen = (done: () => void) => {
+    timers.current.push(
+      setTimeout(() => {
+        setLeaving(true);
+        timers.current.push(setTimeout(done, exitMs()));
+      }, STAMP_MS),
+    );
+  };
   // `deadline` ya está en el reloj de este navegador (ver `toPermission`).
   const time = useRemaining(request.deadline ?? request.expiresAt);
   const expired = time !== null && time.left <= 0;
@@ -65,8 +82,8 @@ export function ConfirmCard({
   useEffect(() => {
     if (!expired || stamp) return;
     setStamp("expired");
-    const id = setTimeout(() => onExpire?.(request.id), STAMP_MS + 600);
-    return () => clearTimeout(id);
+    leaveThen(() => onExpire?.(request.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expired, stamp, onExpire, request.id]);
 
   // Rechazar primero y discreto; aprobar al final y en color. Los textos son de la app (`strings`).
@@ -81,21 +98,23 @@ export function ConfirmCard({
     onRespond(request.id, approved);
     const status: Stamp = approved ? "approved" : "rejected";
     setStamp(status);
-    setTimeout(() => onSettled?.(request.id, status), STAMP_MS);
+    leaveThen(() => onSettled?.(request.id, status));
   };
 
   const stampLabel = stamp === "approved" ? t.stampApproved : stamp === "rejected" ? t.stampRejected : stamp === "cancelled" ? t.stampCancelled : t.stampExpired;
   const locked = pending !== null || stamp !== null;
+  // Las fechas ISO del título («2026-11-02T11:00:00-06:00») se leen como fecha: «lunes 2 de noviembre, 11:00 a. m.».
+  const title = humanizeDates(request.title, { locale: t.numberLocale });
 
   return (
-    <section className="piloto-ticket" data-state={stamp ?? "open"} data-urgent={urgent || undefined} aria-label={t.confirmTitle}>
+    <section className="piloto-ticket" data-state={stamp ?? "open"} data-leaving={leaving || undefined} data-urgent={urgent || undefined} aria-label={t.confirmTitle}>
       <div className="piloto-ticket-head">
         <span className="piloto-ticket-icon" aria-hidden>
           <ShieldAlert className="h-5 w-5" />
         </span>
         <div className="min-w-0 flex-1">
           <p className="piloto-ticket-ask">{t.confirmTitle}</p>
-          <p className="piloto-ticket-title">{request.title}</p>
+          <p className="piloto-ticket-title">{title}</p>
           {request.tool && <code className="piloto-ticket-tool">{request.tool}</code>}
         </div>
       </div>
@@ -123,12 +142,12 @@ export function ConfirmCard({
             </button>
           ))}
         </div>
+        {time !== null && (
+          <div className="piloto-fuse" aria-hidden>
+            <span style={{ transform: `scaleX(${Math.max(0, Math.min(1, time.left / time.total))})` }} />
+          </div>
+        )}
       </div>
-      {time !== null && (
-        <div className="piloto-fuse" aria-hidden>
-          <span style={{ transform: `scaleX(${Math.max(0, Math.min(1, time.left / time.total))})` }} />
-        </div>
-      )}
       {stamp && (
         <span className="piloto-stamp" data-kind={stamp} role="status">
           {stampLabel}
@@ -151,7 +170,7 @@ export function DecisionLines({ decisions }: { decisions: Decision[] }) {
           <li key={d.id} className="piloto-decision" data-status={d.status}>
             <Icon className="h-4 w-4 shrink-0" aria-hidden />
             <span className="min-w-0">
-              <strong>{label}:</strong> {d.title}
+              <strong>{label}:</strong> {humanizeDates(d.title, { locale: t.numberLocale })}
               {d.detail && <span className="piloto-decision-detail"> ({d.detail})</span>}
             </span>
           </li>

@@ -31,10 +31,15 @@ export type PilotoSplitOptions = {
   shortcut?: string | string[] | false;
   /** Esc cierra el panel de escritorio (default true; en la hoja lo maneja vaul). */
   escapeToClose?: boolean;
+  /**
+   * Llave de localStorage para recordar si estaba abierto: al recargar, el panel de escritorio vuelve
+   * abierto. En móvil no reabre la hoja (taparía la pantalla). Sin llave, siempre arranca cerrado.
+   */
+  openKey?: string;
 };
 
 export function usePilotoSplit(options: PilotoSplitOptions | string) {
-  const { widthKey, defaultWidth = 420, desktopMinWidth = 1024, onOpenChange, shortcut = DEFAULT_SHORTCUT, escapeToClose = true } =
+  const { widthKey, defaultWidth = 420, desktopMinWidth = 1024, onOpenChange, shortcut = DEFAULT_SHORTCUT, escapeToClose = true, openKey } =
     typeof options === "string" ? ({ widthKey: options } as PilotoSplitOptions) : options;
   const isDesktop = useIsDesktop(desktopMinWidth);
   const panelRef = usePanelRef();
@@ -81,6 +86,8 @@ export function usePilotoSplit(options: PilotoSplitOptions | string) {
   useEffect(() => {
     notify.current?.(isOpen);
   }, [isOpen]);
+
+  useRememberedOpen({ openKey, isOpen, open, desktopMinWidth });
 
   // ⌘/Ctrl + tecla abre o cierra; Esc cierra (si nadie más lo atendió, p. ej. un modal).
   const toggleRef = useRef<() => void>(() => {});
@@ -287,6 +294,62 @@ function readWidth(key: string, fallback: number): number {
 function writeWidth(key: string, px: number) {
   try {
     localStorage.setItem(key, String(Math.round(px)));
+  } catch {
+    /* sin almacenamiento */
+  }
+}
+
+/**
+ * Recuerda abierto/cerrado en localStorage (`openKey`) y, si estaba abierto y la ventana es de
+ * escritorio, llama `open` al montar. Lo guardado se lee ANTES de escribir: el primer `isOpen`
+ * (cerrado, el de montaje) no lo pisa; sólo se guardan los cambios. `matchMedia` directo porque
+ * `useIsDesktop` todavía no se sincroniza en el primer efecto.
+ */
+export function useRememberedOpen({
+  openKey,
+  isOpen,
+  open,
+  desktopMinWidth = 1024,
+}: {
+  openKey?: string;
+  isOpen: boolean;
+  open: () => void;
+  desktopMinWidth?: number;
+}) {
+  const openRef = useRef(open);
+  openRef.current = open;
+  useEffect(() => {
+    if (!openKey || !readFlag(openKey) || !window.matchMedia(`(min-width: ${desktopMinWidth}px)`).matches) return;
+    // Un cuadro después: el Group de paneles ya registró el panel y `expand` surte efecto. Cancelable,
+    // así que el doble efecto de StrictMode abre una sola vez.
+    const id = requestAnimationFrame(() => openRef.current());
+    return () => cancelAnimationFrame(id);
+  }, [openKey, desktopMinWidth]);
+
+  const lastSaved = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (!openKey) return;
+    if (lastSaved.current === null) {
+      lastSaved.current = isOpen;
+      return;
+    }
+    if (lastSaved.current === isOpen) return;
+    lastSaved.current = isOpen;
+    writeFlag(openKey, isOpen);
+  }, [openKey, isOpen]);
+}
+
+function readFlag(key: string): boolean {
+  try {
+    return localStorage.getItem(key) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeFlag(key: string, on: boolean) {
+  try {
+    localStorage.setItem(key, on ? "1" : "0");
   } catch {
     /* sin almacenamiento */
   }

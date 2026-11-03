@@ -118,6 +118,36 @@ export function createMockTransport(): PilotTransport {
         return;
       }
 
+      // La tarjeta con una fecha ISO en el título (como la arma gs para `calendar_create`).
+      if (/agenda|recordatorio|calendar/i.test(text)) {
+        await say("Lo agendo en tu calendario.");
+        const toolCallId = id("call");
+        e({ type: "TOOL_CALL_START", toolCallId, toolCallName: "calendar_create" });
+        e({ type: "TOOL_CALL_ARGS", toolCallId, delta: JSON.stringify({ titulo: "URGENTE: Pagar la tarjeta de crédito", inicio: "2026-11-02T11:00:00-06:00" }) });
+        e({ type: "TOOL_CALL_END", toolCallId });
+        const interruptId = id("int");
+        paused.set(threadId, { interruptId, toolCallId });
+        e({
+          type: "RUN_FINISHED",
+          threadId,
+          runId,
+          outcome: {
+            type: "interrupt",
+            interrupts: [
+              {
+                id: interruptId,
+                reason: "confirmation",
+                message: "Agendar «URGENTE: Pagar la tarjeta de crédito» el 2026-11-02T11:00:00-06:00",
+                toolCallId,
+                expiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),
+                responseSchema: { type: "object", properties: { approved: { type: "boolean" } }, required: ["approved"] },
+              },
+            ],
+          },
+        });
+        return;
+      }
+
       if (/cron|monitor|purga|falló|fallo|run|fail/i.test(text)) {
         await say("Reviso tus crons.");
         await tool("list_crons", {}, "3 crons");
