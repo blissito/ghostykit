@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ghostykit embed</title>
+  <style>body{margin:0;font:16px/1.5 system-ui,sans-serif;background:#f4f4f6;color:#191a20}main{max-width:640px;margin:48px auto;padding:0 16px}</style>
+</head>
+<body>
+  <main>
+    <h1>Barbería Don Memo</h1>
+    <p>Una app cualquiera, sin React. El botón de abajo a la derecha abre al agente.</p>
+    <p>Construye antes el paquete (<code>npm run build</code>) y abre este archivo en el navegador. Sin servidor,
+      un <code>fetch</code> de mentira contesta en AG-UI; con <code>?real</code> le pega a <code>/__ghosty/agent</code> de verdad.</p>
+  </main>
+
+  <script src="../packages/ghostykit/dist/embed.js"></script>
+  <script>
+    // El agente de mentira: contesta por SSE con los eventos de AG-UI.
+    if (!location.search.includes("real")) {
+      const realFetch = window.fetch;
+      window.fetch = async (url, init) => {
+        if (String(url) !== "/__ghosty/agent") return realFetch(url, init);
+        const input = JSON.parse(init.body);
+        const last = [...input.messages].reverse().find((m) => m.role === "user");
+        const reply = last ? `Recibí: «${last.content}». Esto es el mock de examples/embed.html.` : "";
+        const ev = [{ type: "RUN_STARTED", threadId: input.threadId, runId: input.runId }];
+        if (reply) {
+          ev.push({ type: "TEXT_MESSAGE_START", messageId: input.runId, role: "assistant" });
+          for (const w of reply.split(/(?<= )/)) ev.push({ type: "TEXT_MESSAGE_CONTENT", messageId: input.runId, delta: w });
+          ev.push({ type: "TEXT_MESSAGE_END", messageId: input.runId });
+        }
+        ev.push({ type: "RUN_FINISHED", threadId: input.threadId, runId: input.runId });
+        const enc = new TextEncoder();
+        const body = new ReadableStream({
+          async start(c) {
+            for (const e of ev) {
+              c.enqueue(enc.encode(`data: ${JSON.stringify(e)}\n\n`));
+              await new Promise((r) => setTimeout(r, 40));
+            }
+            c.close();
+          },
+        });
+        return new Response(body, { headers: { "content-type": "text/event-stream" } });
+      };
+    }
+
+    GhostyKit.mount(null, {
+      url: "/__ghosty/agent",
+      agentName: "Agente de la barbería",
+      welcome: "¿Qué hacemos hoy?",
+      placeholder: "Pide una reserva…",
+      theme: "auto",
+      open: location.search.includes("open"),
+    });
+  </script>
+</body>
+</html>

@@ -280,6 +280,29 @@ const split = usePilotoSplit({ widthKey: "app:agent-width", openKey: "app:agent-
 `<PilotoPanel variant title avatar onClose onNewConversation>` is the standard shell (header with name, «New conversation» and close; sticky to the window). `useConversationKey(key)` gives `[key, rotate]` for the visible conversation: build your `threadId` with it — old threads are kept on the server, just hidden. `usePilotoSplit` also does ⌘/Ctrl+I (and ⌘K) to toggle and Esc to close (`shortcut`, `escapeToClose`). With `openKey` it remembers whether it was open: after a reload the desktop panel comes back open (the mobile sheet never reopens by itself).
 Colors: `--gk-split-handle`, `--gk-split-accent`, `--gk-split-sheet-bg`, `--gk-split-overlay`.
 
+## No React? One `<script>` (`ghostykit/embed.js`)
+
+For agents (llms.txt): this is the ONE canonical way to put Piloto in a page that is not a React app.
+
+```html
+<script src="https://unpkg.com/ghostykit@0.12.0/dist/embed.js" defer></script>
+<script>
+  addEventListener("DOMContentLoaded", () => {
+    GhostyKit.mount(null, { url: "/api/agent", agentName: "Assistant", theme: "auto", welcome: "How can I help?" });
+  });
+</script>
+```
+
+- `GhostyKit.mount(target, options)` → `{ open, close, destroy }`. `target` is an element, a selector or `null` (a new `<div>` in `<body>`).
+- It draws a floating button (bottom-right) that opens a solid side panel; on phones the panel is a full-height sheet. `Esc` closes it.
+- `url` is your AG-UI endpoint (`POST`, SSE), called with `credentials: "same-origin"`: keep it on your own origin and let your server add the secrets. `headers` is optional.
+- Options: `url` (required), `agentName`, `theme` (`light` · `dark` · `auto`), `skin`, `welcome`, `placeholder`, `suggestions`, `locale`, `headers`, `open`, `css`.
+- The thread id is saved in `localStorage` per `url`: a reload reconnects to the same conversation.
+- One file: React, motion, streamdown and `styles.css` are inside (≈1.1 MB, ≈330 KB gzip). Pass `css: false` if your page already loads `ghostykit/styles.css`.
+- Nothing hits the network until the panel is opened for the first time.
+
+Try it locally: `npm run build` and open `examples/embed.html` (a mock `fetch` answers in AG-UI).
+
 ## Accessibility
 
 - Keyboard-first: Enter sends, Shift+Enter adds a new line, Backspace on an empty box removes the last reference. Menus close with Escape, and focus rings are visible (`--piloto-focus`).

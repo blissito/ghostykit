@@ -1,6 +1,6 @@
 {
   "name": "ghostykit",
-  "version": "0.11.7",
+  "version": "0.12.0",
   "description": "Ghosty Autopilot — the autopilot chat for your React app, on AG-UI: works with LangGraph, Mastra, CrewAI or any AG-UI agent. Streaming text, agent steps, human approval cards (interrupt/resume), attachments and voice.",
   "type": "module",
   "main": "./dist/core/index.js",
@@ -37,7 +37,8 @@
     "./styles.css": "./dist/styles.css",
     "./package.json": "./package.json",
     "./fonts.css": "./dist/fonts.css",
-    "./split.css": "./dist/split.css"
+    "./split.css": "./dist/split.css",
+    "./embed.js": "./dist/embed.js"
   },
   "files": [
     "dist",
@@ -48,7 +49,7 @@
     "*.css"
   ],
   "scripts": {
-    "build": "rm -rf dist && node scripts/build.mjs && tsc -p tsconfig.build.json && node scripts/build-css.mjs",
+    "build": "rm -rf dist && node scripts/build.mjs && tsc -p tsconfig.build.json && node scripts/build-css.mjs && node scripts/build-embed.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "prepack": "cp ../../LICENSE . && npm run build"
@@ -116,5 +117,7 @@
   "homepage": "https://github.com/blissito/ghostykit#readme",
   "dependencies": {
     "@ag-ui/core": "^1.0.3"
-  }
+  },
+  "unpkg": "./dist/embed.js",
+  "jsdelivr": "./dist/embed.js"
 }
