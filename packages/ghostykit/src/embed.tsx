@@ -7,6 +7,7 @@
 // con `dist/styles.css` incrustado: un solo archivo, nada que sincronizar.
 import { useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { X } from "lucide-react";
 import css from "piloto:styles";
 import { Piloto, type PilotoHandle } from "./react/Piloto";
 import type { PilotTheme } from "./react/context";
@@ -44,14 +45,19 @@ const STYLE_ID = "ghostykit-embed-css";
 // El cascarón (botón y panel). Todo bajo `.gk-embed`, sin `!important`. El botón y la cabecera van
 // con `data-piloto-isolate`: el blindaje de `.piloto button` (más específico) no les quita el fondo.
 const SHELL_CSS = `
-.gk-embed .gk-launcher{position:fixed;right:20px;bottom:20px;z-index:2147483000;width:56px;height:56px;border-radius:999px;border:0;cursor:pointer;display:flex;align-items:center;justify-content:center;background:var(--piloto-inverse);color:var(--piloto-text-inverse);box-shadow:0 6px 20px rgba(0,0,0,.18)}
+.gk-embed .gk-launcher{padding:0;margin:0;position:fixed;right:20px;bottom:20px;z-index:2147483000;width:56px;height:56px;border-radius:999px;border:0;cursor:pointer;display:flex;align-items:center;justify-content:center;background:var(--piloto-inverse);color:var(--piloto-text-inverse);box-shadow:0 6px 20px rgba(0,0,0,.18)}
 .gk-embed .gk-launcher:focus-visible{outline:2px solid var(--piloto-focus);outline-offset:3px}
 .gk-embed .gk-panel{position:fixed;top:0;right:0;bottom:0;z-index:2147483001;width:min(440px,100vw);display:flex;flex-direction:column;background:var(--piloto-bg);color:var(--piloto-text);border-left:1px solid var(--piloto-border);box-shadow:-8px 0 24px rgba(0,0,0,.08)}
 .gk-embed .gk-panel[data-open="false"]{display:none}
 .gk-embed .gk-head{display:flex;align-items:center;gap:8px;flex-shrink:0;height:48px;padding:0 8px 0 16px;border-bottom:1px solid var(--piloto-border);background:var(--piloto-bg);font:600 15px/1.2 var(--piloto-font)}
 .gk-embed .gk-head span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.gk-embed .gk-close{width:36px;height:36px;border:0;border-radius:10px;background:transparent;color:var(--piloto-text-2);cursor:pointer;display:flex;align-items:center;justify-content:center}
-.gk-embed .gk-close:hover{background:var(--piloto-surface)}
+/* El cerrar es el mismo botón que el de PilotoPanel (\`gk-panel-btn\`, ícono X de lucide). La cabecera queda
+   fuera del reset de \`.piloto\` (\`data-piloto-isolate\`), así que aquí se fija TODO lo que el CSS anfitrión
+   suele tocar (\`button{padding:9px 14px}\` dejaba la X en 8 px): padding, márgenes, fuente y tamaño del svg. */
+.gk-embed .gk-panel-btn{flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:36px;height:36px;min-width:36px;padding:0;margin:0;border:0;border-radius:9999px;background:transparent;color:var(--piloto-text);font:inherit;line-height:1;cursor:pointer;-webkit-appearance:none;appearance:none;box-shadow:none}
+.gk-embed .gk-panel-btn:hover{background:var(--piloto-surface);color:var(--piloto-text)}
+.gk-embed .gk-panel-btn:focus-visible{outline:2px solid var(--piloto-focus);outline-offset:2px}
+.gk-embed .gk-panel-btn svg{display:block;width:20px;height:20px;flex-shrink:0}
 .gk-embed .gk-body{flex:1;min-height:0;display:flex;flex-direction:column;background:var(--piloto-bg)}
 .gk-embed .gk-body > .piloto{flex:1;min-height:0;height:100%}
 @media (max-width:640px){.gk-embed .gk-panel{width:100vw;height:100dvh;bottom:auto;border-left:0;box-shadow:none}}
@@ -103,11 +109,6 @@ function createOpenStore(initial: boolean) {
 const ChatIcon = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z" />
-  </svg>
-);
-const CloseIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-    <path d="M6 6l12 12M18 6 6 18" />
   </svg>
 );
 
@@ -165,8 +166,8 @@ function Embed({ opts, store }: { opts: MountOptions; store: ReturnType<typeof c
       <div className="piloto gk-panel" data-theme={theme} data-skin={skin} data-open={open ? "true" : "false"} role="dialog" aria-label={name}>
         <div className="gk-head" data-piloto-isolate="">
           <span>{name}</span>
-          <button type="button" className="gk-close" aria-label="Cerrar" onClick={() => store.set(false)}>
-            <CloseIcon />
+          <button type="button" className="gk-panel-btn" title="Cerrar" aria-label="Cerrar" onClick={() => store.set(false)}>
+            <X size={20} strokeWidth={1.8} aria-hidden="true" />
           </button>
         </div>
         <div className="gk-body">{body}</div>
