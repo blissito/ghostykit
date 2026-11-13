@@ -538,6 +538,17 @@ export function Composer({
             value={value}
             placeholder={placeholder}
             onChange={(e) => setValue(e.target.value)}
+            onPaste={(e) => {
+              // Pegar una captura o un archivo copiado (cmd/ctrl+V) lo adjunta; el texto se pega normal.
+              if (!withFiles) return;
+              const pasted = Array.from(e.clipboardData?.items ?? [])
+                .filter((item) => item.kind === "file")
+                .map((item) => item.getAsFile())
+                .filter((f): f is File => f !== null);
+              if (!pasted.length) return;
+              e.preventDefault();
+              addFiles(pasted);
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();

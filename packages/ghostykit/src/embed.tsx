@@ -10,6 +10,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { X } from "lucide-react";
 import css from "piloto:styles";
 import { Piloto, type PilotoHandle } from "./react/Piloto";
+import { definePlugin } from "./react/plugins";
 import type { PilotTheme } from "./react/context";
 import { createAgUiTransport } from "./transport";
 
@@ -32,6 +33,8 @@ export interface MountOptions {
   css?: boolean;
   /** Abrir el panel al montar. */
   open?: boolean;
+  /** Adjuntar y pegar imágenes y texto (viajan dentro del turno). Default: sí. */
+  attachments?: boolean;
 }
 
 export interface EmbedHandle {
@@ -41,6 +44,12 @@ export interface EmbedHandle {
 }
 
 const STYLE_ID = "ghostykit-embed-css";
+
+// Sin `upload`, los adjuntos viajan inline (base64) en el cuerpo del turno: sólo imágenes y texto, y
+// 4 MB por archivo, porque el relay de las apps corta el cuerpo en 8 MB.
+const EMBED_PLUGINS = [
+  definePlugin({ name: "embed-attachments", composer: { attachments: { accept: "image/*,text/*", maxBytes: 4 * 1024 * 1024 } } }),
+];
 
 // El cascarón (botón y panel). Todo bajo `.gk-embed`, sin `!important`. El botón y la cabecera van
 // con `data-piloto-isolate`: el blindaje de `.piloto button` (más específico) no les quita el fondo.
@@ -146,6 +155,8 @@ function Embed({ opts, store }: { opts: MountOptions; store: ReturnType<typeof c
         welcome={opts.welcome}
         placeholder={opts.placeholder}
         suggestions={opts.suggestions}
+        features={{ attachments: opts.attachments ?? true }}
+        plugins={EMBED_PLUGINS}
         // El hilo nuevo se guarda en cuanto arranca su primer turno.
         onTurnStart={() => {
           const id = pilotoRef.current?.pilot.threadId;

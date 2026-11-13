@@ -78,3 +78,54 @@ describe("embed mount", () => {
     act(() => h.destroy());
   });
 });
+
+describe("embed: pegar imágenes", () => {
+  const pasteInto = (box: Element, items: object[]) => {
+    const ev = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(ev, "clipboardData", { value: { items } });
+    box.dispatchEvent(ev);
+    return ev;
+  };
+
+  it("cmd/ctrl+V con una captura la adjunta; con texto no estorba", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => sse([{ type: "MESSAGES_SNAPSHOT", messages: [] }])));
+    URL.createObjectURL ??= () => "blob:x";
+    URL.revokeObjectURL ??= () => {};
+    let h!: ReturnType<typeof mount>;
+    await act(async () => {
+      h = mount(null, { url: URL_, open: true });
+      await new Promise((r) => setTimeout(r, 30));
+    });
+    const box = document.querySelector("textarea")!;
+    // Sólo texto: el pegado sigue su curso normal.
+    let ev!: Event;
+    await act(async () => {
+      ev = pasteInto(box, [{ kind: "string", type: "text/plain", getAsFile: () => null }]);
+    });
+    expect(ev.defaultPrevented).toBe(false);
+    // Una captura llega como `image.png`, a veces sin `type`: manda la extensión.
+    const shot = new File([new Uint8Array([1, 2, 3])], "image.png", { type: "" });
+    await act(async () => {
+      ev = pasteInto(box, [{ kind: "file", type: "image/png", getAsFile: () => shot }]);
+    });
+    expect(ev.defaultPrevented).toBe(true);
+    expect(document.querySelector(".gk-panel")?.innerHTML).toContain("blob:");
+    act(() => h.destroy());
+  });
+
+  it("con attachments: false no adjunta", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => sse([{ type: "MESSAGES_SNAPSHOT", messages: [] }])));
+    let h!: ReturnType<typeof mount>;
+    await act(async () => {
+      h = mount(null, { url: URL_, open: true, attachments: false });
+      await new Promise((r) => setTimeout(r, 30));
+    });
+    const shot = new File([new Uint8Array([1])], "image.png", { type: "image/png" });
+    let ev!: Event;
+    await act(async () => {
+      ev = pasteInto(document.querySelector("textarea")!, [{ kind: "file", type: "image/png", getAsFile: () => shot }]);
+    });
+    expect(ev.defaultPrevented).toBe(false);
+    act(() => h.destroy());
+  });
+});
